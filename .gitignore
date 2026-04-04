@@ -1,0 +1,10 @@
+data/
+data_backup/
+.pytest_cache/
+__pycache__/
+.vscode/
+notebooks/
+*.csv
+*.gz
+*.pkl
+models/
