@@ -3,11 +3,21 @@ from pydantic import BaseModel
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from sklearn.ensemble import IsolationForest
+import joblib
 
 app = FastAPI(title="Log Anomaly Detection Service")
 
 DATA_PATH = Path("data/processed/anomalies_explained.csv")
+MODEL_PATH = Path("src/models/model.pkl")
+
+# -----------------------
+# Load model once
+# -----------------------
+
+if MODEL_PATH.exists():
+    model = joblib.load(MODEL_PATH)
+else:
+    model = None
 
 # -----------------------
 # Health
@@ -49,11 +59,8 @@ class LogRequest(BaseModel):
 @app.post("/predict_anomaly")
 def predict_anomaly(log: LogRequest):
 
-    model = IsolationForest(
-        n_estimators=100,
-        contamination=0.01,
-        random_state=42
-    )
+    if model is None:
+        return {"error": "Model not found. Run training first."}
 
     X = np.array([[
         log.requests_per_minute,
@@ -61,7 +68,7 @@ def predict_anomaly(log: LogRequest):
         log.avg_response_size
     ]])
 
-    prediction = model.fit_predict(X)[0]
+    prediction = model.predict(X)[0]
     score = model.decision_function(X)[0]
 
     return {
