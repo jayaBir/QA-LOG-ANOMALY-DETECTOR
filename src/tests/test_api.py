@@ -4,6 +4,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.models.train import train_model
+train_model()
+
 from fastapi.testclient import TestClient
 from src.service.app import app
 
