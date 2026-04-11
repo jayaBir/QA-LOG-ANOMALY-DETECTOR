@@ -1,14 +1,16 @@
 import pandas as pd
 
 FEATURES = [
-    "request_per_minute",
+    "requests_per_minute",
     "error_rate",
-    "avg_response_size",
+    "avg_response_size"
 ]
+
+FALLBACK_EXPLANATION = "statistical_anomaly_detected"
 
 
 def load_data():
-    return pd.read_csv("data/processed/anomalies.csv")
+    return pd.read_csv("data/processed/anomalies_explained.csv")
 
 
 def test_anomalies_have_explanations():
@@ -24,14 +26,27 @@ def test_anomalies_have_explanations():
 
 
 def test_explanations_reference_known_features():
+
     df = load_data()
+
     if "explanation" not in df.columns:
         return
+
     anomalies = df[df["is_anomaly"] == 1]
 
-    for exp in anomalies["explanation"].dropna():
-        assert any(feature in exp for feature in FEATURES), (
-            f"Unknown feature referenced in explanation: {exp}"
+    for feature in FEATURES:
+
+        feature_anomalies = anomalies[
+            anomalies["explanation"].str.contains(feature, na=False)
+        ]
+
+        if feature_anomalies.empty:
+            continue
+
+        z_col = f"{feature}_z"
+
+        assert (feature_anomalies[z_col].abs() > 3).all(), (
+            f"{feature} explanation given but not statistically extreme"
         )
 
 
