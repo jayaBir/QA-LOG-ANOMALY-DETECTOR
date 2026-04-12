@@ -29,7 +29,9 @@ jobs:
 
      
       - name: Run pipeline to generate data
-        run: python -m run_pipeline
+        run: |
+          python -c "import sys; sys.path.append('.'); import run_pipeline"
+       
 
       - name: Run tests
         run: pytest
