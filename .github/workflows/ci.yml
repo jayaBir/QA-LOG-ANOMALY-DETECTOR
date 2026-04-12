@@ -27,7 +27,7 @@ jobs:
 
      
       - name: Run pipeline to generate data
-        run: python run_pipeline.py
+        run: PYTHONPATH=. python run_pipeline.py
 
       - name: Run tests
         run: pytest
