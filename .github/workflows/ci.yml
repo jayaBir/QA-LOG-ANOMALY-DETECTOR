@@ -27,7 +27,7 @@ jobs:
 
      
       - name: Run pipeline to generate data
-        run: python src/pipeline/run_pipeline.py
+        run: python run_pipeline.py
 
       - name: Run tests
         run: pytest
