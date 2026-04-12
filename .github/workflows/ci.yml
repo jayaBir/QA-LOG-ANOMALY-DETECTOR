@@ -27,10 +27,11 @@ jobs:
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
 
-     
-      - name: Run pipeline to generate data
-        run: |
-          PYTHONPATH=$(pwd) python run_pipeline.py
+      - name: Build pipeline image
+        run: docker build -f docker/Dockerfile.pipeline -t qa-pipeline .
+
+      - name: Run pipeline container
+        run: docker run qa-pipeline
        
 
       - name: Run tests
