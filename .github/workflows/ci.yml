@@ -24,6 +24,8 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install pytest
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
 
      
       - name: Run pipeline to generate data
