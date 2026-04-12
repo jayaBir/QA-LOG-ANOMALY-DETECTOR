@@ -30,8 +30,7 @@ jobs:
      
       - name: Run pipeline to generate data
         run: |
-          cd src
-          python -m ../run_pipeline
+          PYTHONPATH=$(pwd) python run_pipeline.py
        
 
       - name: Run tests
