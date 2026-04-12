@@ -27,9 +27,7 @@ jobs:
 
      
       - name: Run pipeline to generate data
-        run: |
-          export PYTHONPATH=$GITHUB_WORKSPACE
-          python run_pipeline.py
+        run: python -m run_pipeline
 
       - name: Run tests
         run: pytest
