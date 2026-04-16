@@ -6,4 +6,6 @@ COPY . .
 
 RUN pip install -r requirements.txt
 
+ENV PYTHONPATH=/app
+
 CMD ["python", "run_pipeline.py"]
