@@ -5,7 +5,7 @@ from src.models.predict import predict
 from src.models.explain_anomalies import explain
 
 
-RAW_FILE = "data/raw/NASA_Jul95"
+RAW_FILE = "data/raw/sample_logs.txt"
 CLEAN_LOG = "data/processed/clean_logs.csv"
 
 
