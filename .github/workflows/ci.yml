@@ -41,7 +41,7 @@ jobs:
         run: pytest
 
       - name: Build Pipeline Image
-        run: docker build -f docker/Dockerfile.pipeline -t qa-pipeline .
+        run: docker build -f docker/pipeline.Dockerfile -t qa-pipeline .
 
       - name: Build API Image
         run: docker build -f docker/Dockerfile.api -t qa-api .
