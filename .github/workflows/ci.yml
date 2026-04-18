@@ -32,6 +32,9 @@ jobs:
 
       - name: Run pipeline container
         run: docker run qa-pipeline
+      
+      - name: Run pipeline locally for tests
+        run: python run_pipeline.py
        
 
       - name: Run tests
