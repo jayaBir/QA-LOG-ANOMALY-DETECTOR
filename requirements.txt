@@ -7,3 +7,4 @@ pydantic
 pytest
 python-multipart
 httpx
+boto3
