@@ -8,3 +8,4 @@ pytest
 python-multipart
 httpx
 boto3
+mlflow
