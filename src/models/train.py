@@ -31,8 +31,11 @@ def train_model():
     
     
 
-    MLFLOW_DIR = Path("mlruns")
-    mlflow.set_tracking_uri(str(MLFLOW_DIR))
+    MLFLOW_DIR = Path.cwd() / "mlruns"
+
+    MLFLOW_DIR.mkdir(parents=True, exist_ok=True)
+
+    mlflow.set_tracking_uri(f"file://{MLFLOW_DIR.resolve()}")
 
     print("Setting up MLflow experiment...")
     mlflow.set_experiment("qa-log-anomaly-detector")
