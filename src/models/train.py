@@ -29,7 +29,10 @@ def train_model():
 
     X = df[FEATURE_COLS]
     
-    mlflow.set_tracking_uri("file:/app/mlruns")
+    
+
+    MLFLOW_DIR = Path("mlruns")
+    mlflow.set_tracking_uri(str(MLFLOW_DIR))
 
     print("Setting up MLflow experiment...")
     mlflow.set_experiment("qa-log-anomaly-detector")

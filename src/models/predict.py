@@ -3,7 +3,10 @@ import mlflow
 import mlflow.sklearn
 from pathlib import Path
 
-mlflow.set_tracking_uri("file:/app/mlruns")
+from pathlib import Path
+
+MLFLOW_DIR = Path("mlruns")
+mlflow.set_tracking_uri(str(MLFLOW_DIR))
 
 FEATURE_PATH = Path("data/processed/features.csv")
 OUTPUT_PATH = Path("data/processed/anomalies.csv")
