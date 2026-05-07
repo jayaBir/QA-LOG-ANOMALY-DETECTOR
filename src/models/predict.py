@@ -3,6 +3,7 @@ import mlflow
 import mlflow.sklearn
 from pathlib import Path
 import os
+import joblib
 
 from pathlib import Path
 
@@ -28,10 +29,10 @@ def predict():
     print("Loading features...")
     df = pd.read_csv(FEATURE_PATH)
 
-    print("Loading model from MLflow Registry...")
-    model = mlflow.sklearn.load_model(
-        "models:/qa-log-anomaly-model/latest"
-    )
+    MODEL_PATH = Path("src/models/model.pkl")
+
+    print("Loading model...")
+    model = joblib.load(MODEL_PATH)
 
     X = df[FEATURE_COLS]
 
