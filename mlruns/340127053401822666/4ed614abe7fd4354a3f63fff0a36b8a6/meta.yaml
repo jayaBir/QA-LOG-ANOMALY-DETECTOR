@@ -1,0 +1,14 @@
+artifact_uri: file:///app/mlruns/340127053401822666/4ed614abe7fd4354a3f63fff0a36b8a6/artifacts
+end_time: 1778054583559
+entry_point_name: ''
+experiment_id: '340127053401822666'
+lifecycle_stage: active
+run_id: 4ed614abe7fd4354a3f63fff0a36b8a6
+run_name: stately-lamb-367
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1778054553007
+status: 3
+tags: []
+user_id: root

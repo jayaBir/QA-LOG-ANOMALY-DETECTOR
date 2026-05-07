@@ -1,0 +1,14 @@
+artifact_uri: file:///app/mlruns/340127053401822666/0f582322012c49e0b1f5e5e343565be5/artifacts
+end_time: 1778000157969
+entry_point_name: ''
+experiment_id: '340127053401822666'
+lifecycle_stage: active
+run_id: 0f582322012c49e0b1f5e5e343565be5
+run_name: intelligent-hog-896
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1778000127911
+status: 3
+tags: []
+user_id: root

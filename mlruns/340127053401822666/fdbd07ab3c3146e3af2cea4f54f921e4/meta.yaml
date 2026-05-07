@@ -1,0 +1,14 @@
+artifact_uri: file:///app/mlruns/340127053401822666/fdbd07ab3c3146e3af2cea4f54f921e4/artifacts
+end_time: 1778144480494
+entry_point_name: ''
+experiment_id: '340127053401822666'
+lifecycle_stage: active
+run_id: fdbd07ab3c3146e3af2cea4f54f921e4
+run_name: capricious-mole-708
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1778144460197
+status: 3
+tags: []
+user_id: root

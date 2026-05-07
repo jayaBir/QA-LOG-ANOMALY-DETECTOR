@@ -1,0 +1,16 @@
+creation_timestamp: 1778000152653
+current_stage: None
+deployment_job_state: null
+description: null
+last_updated_timestamp: 1778000152653
+model_id: m-6b7aa6512880438baf9d05f47b7f3a4d
+name: qa-log-anomaly-model
+run_id: 0f582322012c49e0b1f5e5e343565be5
+run_link: null
+source: models:/m-6b7aa6512880438baf9d05f47b7f3a4d
+status: READY
+status_message: null
+storage_location: file:///app/mlruns/340127053401822666/models/m-6b7aa6512880438baf9d05f47b7f3a4d/artifacts
+user_id: null
+version: 1
+workspace: default

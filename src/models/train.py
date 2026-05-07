@@ -1,8 +1,15 @@
 import pandas as pd
 import joblib
-import mlflow
-import mlflow.sklearn
 from pathlib import Path
+
+try:
+    import mlflow
+    from mlflow import sklearn
+    MLFLOW_ENABLED = True
+except ImportError:
+    mlflow = None
+    sklearn = None
+    MLFLOW_ENABLED = False
 
 from src.models.isolation_forest import create_model
 
@@ -21,6 +28,8 @@ def train_model():
     df = pd.read_csv(INPUT_PATH)
 
     X = df[FEATURE_COLS]
+    
+    mlflow.set_tracking_uri("file:/app/mlruns")
 
     print("Setting up MLflow experiment...")
     mlflow.set_experiment("qa-log-anomaly-detector")
@@ -46,7 +55,10 @@ def train_model():
         mlflow.log_metric("training_rows", len(X))
 
         # Log model artifact
-        mlflow.sklearn.log_model(model, "isolation_forest_model")
+        sklearn.log_model(
+            model,
+            "isolation_forest_model",
+            registered_model_name="qa-log-anomaly-model")
 
         # Log saved pickle file as artifact
         mlflow.log_artifact(str(MODEL_PATH))

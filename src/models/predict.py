@@ -1,9 +1,11 @@
 import pandas as pd
-import joblib
+import mlflow
+import mlflow.sklearn
 from pathlib import Path
 
+mlflow.set_tracking_uri("file:/app/mlruns")
+
 FEATURE_PATH = Path("data/processed/features.csv")
-MODEL_PATH = Path("src/models/model.pkl")
 OUTPUT_PATH = Path("data/processed/anomalies.csv")
 
 FEATURE_COLS = [
@@ -17,8 +19,10 @@ def predict():
     print("Loading features...")
     df = pd.read_csv(FEATURE_PATH)
 
-    print("Loading model...")
-    model = joblib.load(MODEL_PATH)
+    print("Loading model from MLflow Registry...")
+    model = mlflow.sklearn.load_model(
+        "models:/qa-log-anomaly-model/latest"
+    )
 
     X = df[FEATURE_COLS]
 

@@ -9,6 +9,7 @@ services:
     container_name: qa-pipeline
     volumes:
       - ./data:/app/data
+      - ./mlruns:/app/mlruns
     command: python run_pipeline.py
 
   api:
@@ -20,5 +21,6 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data
+      - ./mlruns:/app/mlruns
     depends_on:
       - pipeline
