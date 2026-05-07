@@ -1,6 +1,7 @@
 import pandas as pd
 import joblib
 from pathlib import Path
+import os
 
 try:
     import mlflow
@@ -34,11 +35,14 @@ def train_model():
     MLFLOW_DIR = Path.cwd() / "mlruns"
 
     MLFLOW_DIR.mkdir(parents=True, exist_ok=True)
+    ARTIFACT_DIR = Path.cwd() / "mlartifacts"
+    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
 
     mlflow.set_tracking_uri(f"file://{MLFLOW_DIR.resolve()}")
 
     print("Setting up MLflow experiment...")
     mlflow.set_experiment("qa-log-anomaly-detector")
+    os.environ["MLFLOW_ARTIFACT_URI"] = f"file://{ARTIFACT_DIR.resolve()}"
 
     with mlflow.start_run():
         print("Creating Isolation Forest model...")

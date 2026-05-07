@@ -2,14 +2,17 @@ import pandas as pd
 import mlflow
 import mlflow.sklearn
 from pathlib import Path
+import os
 
 from pathlib import Path
 
 MLFLOW_DIR = Path.cwd() / "mlruns"
-
 MLFLOW_DIR.mkdir(parents=True, exist_ok=True)
+ARTIFACT_DIR = Path.cwd() / "mlartifacts"
+ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
 
 mlflow.set_tracking_uri(f"file://{MLFLOW_DIR.resolve()}")
+os.environ["MLFLOW_ARTIFACT_URI"] = f"file://{ARTIFACT_DIR.resolve()}"
 
 FEATURE_PATH = Path("data/processed/features.csv")
 OUTPUT_PATH = Path("data/processed/anomalies.csv")
