@@ -67,8 +67,7 @@ def train_model():
         # Log model artifact
         sklearn.log_model(
             model,
-            "isolation_forest_model",
-            registered_model_name="qa-log-anomaly-model")
+            "isolation_forest_model")
 
         # Log saved pickle file as artifact
         mlflow.log_artifact(str(MODEL_PATH))
