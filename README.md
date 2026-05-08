@@ -7,8 +7,8 @@ Stack: Python, FastAPI, scikit-learn, MLflow, Docker, GitHub Actions, AWS S3
 
 **Architecture**
 
-
 graph TD
+
     %% CI/CD Entry
     A[Git Push / PR] --> B[GitHub Actions: ci.yml]
     B --> B1[Setup Python 3.10]
