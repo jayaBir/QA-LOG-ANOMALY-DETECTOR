@@ -4,12 +4,50 @@ Real-time + batch anomaly detection for web server logs using Isolation Forest. 
 
 Stack: Python, FastAPI, scikit-learn, MLflow, Docker, GitHub Actions, AWS S3
 
+
 **Architecture**
-S3 Raw Logs → parse → feature engineering → train → predict → explain
-                                    ↓
-                              MLflow Registry
-                                    ↓
-                            FastAPI /predict_anomaly  ← EC2
+```mermaid
+graph TD
+    A[GitHub Push to main] --> B[GitHub Actions CI]
+    B --> C{USE_S3?}
+    C -->|false CI| D[data/raw/sample_logs.txt]
+    C -->|true Prod| E[AWS S3: NASA_Jul95.gz]
+    
+    D --> F[parse_log_file]
+    E --> F
+    
+    F --> G[feature_builder.py]
+    G --> H[train.py + MLflow]
+    H --> I[MLflow Model Registry<br/>qa-log-anomaly-detector]
+    
+    I --> J[Docker Build: qa-api]
+    J --> K[EC2: FastAPI Container]
+    
+    K --> L[GET /health]
+    K --> M[POST /predict_anomaly<br/>Real-time]
+    K --> N[POST /detect<br/>Batch]
+    
+    I -.-> O[Stages: None → Staging → Production]
+    style O stroke-dasharray: 5 5
+    
+    subgraph Pipeline [run_pipeline.py]
+        F
+        G
+        H
+    end
+    
+    subgraph Serving
+        K
+        L
+        M
+        N
+    end
+
+    style H fill:#e1f5ff,stroke:#0066cc
+    style I fill:#ffe1e1,stroke:#cc0000
+    style K fill:#e1ffe1,stroke:#00aa00
+
+
 **Key Features**:
 •	Automated Pipeline: run_pipeline.py orchestrates end-to-end flow
 •	Dual Data Mode: sample_logs.txt for CI, S3 for production training via USE_S3=true
@@ -18,6 +56,7 @@ S3 Raw Logs → parse → feature engineering → train → predict → explain
 •	Serving: FastAPI with /health, /predict_anomaly real-time, /detect batch endpoints
 •	Explainability: Z-score based feature attribution for each anomaly
 •	CI/CD: GitHub Actions runs tests + builds Docker images on every PR
+
 
 **Project Structure**
 ├── .github/workflows/ci.yml     # CI: test, train on sample, build images
@@ -40,21 +79,28 @@ S3 Raw Logs → parse → feature engineering → train → predict → explain
 ├── mlruns/                      # MLflow local tracking
 ├── run_pipeline.py              # Main orchestrator
 └── docker-compose.yml           # Local: pipeline + API
+
 Quick Start
 1. Local Development
-# Install deps
+ **Install deps**
 pip install -r requirements.txt
 
-# Run full pipeline on sample data
+ **Run full pipeline on sample data**
 python run_pipeline.py
 
-# Start API
+ **Start API**
+
 uvicorn src.service.app:app --reload
-# Visit http://localhost:8000/docs
+
+ Visit http://localhost:8000/docs
+
 2. Docker Compose
+
 docker-compose up --build
 # Pipeline runs first, then API starts on :8000
+
 3. Production Training with S3
+
 export USE_S3=true
 export AWS_ACCESS_KEY_ID=xxx
 export AWS_SECRET_ACCESS_KEY=xxx
