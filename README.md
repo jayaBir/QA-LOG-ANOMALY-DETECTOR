@@ -1,4 +1,4 @@
-QA Log Anomaly Detection Service
+**QA Log Anomaly Detection Service**
 
 Real-time + batch anomaly detection for web server logs using Isolation Forest. Built with MLOps best practices: automated training, experiment tracking, model registry, containerized serving, and CI/CD.
 
