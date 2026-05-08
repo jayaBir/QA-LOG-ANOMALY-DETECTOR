@@ -6,46 +6,92 @@ Stack: Python, FastAPI, scikit-learn, MLflow, Docker, GitHub Actions, AWS S3
 
 
 **Architecture**
-```mermaid
 graph TD
-    A[GitHub Push to main] --> B[GitHub Actions CI]
-    B --> C{USE_S3?}
-    C -->|false CI| D[data/raw/sample_logs.txt]
-    C -->|true Prod| E[AWS S3: NASA_Jul95.gz]
-    
-    D --> F[parse_log_file]
-    E --> F
-    
-    F --> G[feature_builder.py]
-    G --> H[train.py + MLflow]
-    H --> I[MLflow Model Registry<br/>qa-log-anomaly-detector]
-    
-    I --> J[Docker Build: qa-api]
-    J --> K[EC2: FastAPI Container]
-    
-    K --> L[GET /health]
-    K --> M[POST /predict_anomaly<br/>Real-time]
-    K --> N[POST /detect<br/>Batch]
-    
-    I -.-> O[Stages: None → Staging → Production]
-    style O stroke-dasharray: 5 5
-    
-    subgraph Pipeline [run_pipeline.py]
-        F
-        G
-        H
-    end
-    
-    subgraph Serving
-        K
-        L
-        M
-        N
+    %% CI/CD Entry
+    A[Git Push / PR] --> B[GitHub Actions: ci.yml]
+    B --> B1[Setup Python 3.10]
+    B1 --> B2[pip install -r requirements.txt]
+    B2 --> B3[docker build -f docker/pipeline.Dockerfile]
+    B3 --> B4[docker run qa-pipeline]
+    B4 --> B5[python run_pipeline.py]
+    B5 --> B6[pytest]
+    B6 --> B7[docker build -f docker/Dockerfile.api]
+
+    %% Pipeline Container Details
+    B4 --> C[qa-pipeline Container]
+    subgraph C [Training: docker/pipeline.Dockerfile]
+        C1{USE_S3 env?} -->|false| C2[data/raw/sample_logs.txt]
+        C1 -->|true| C3[S3: raw/sample_logs.txt<br/>boto3.download_file]
+        C2 --> C4[src/parser/log_parser.py<br/>→ clean_logs.csv]
+        C3 --> C4
+        C4 --> C5[src/features/feature_builder.py<br/>→ features.csv]
+        C5 --> C6[src/models/train.py<br/>IsolationForest]
+        C6 --> C7[MLflow: sqlite:///mlflow.db<br/>log_model + register]
+        C6 --> C8[joblib.dump → src/models/model.pkl]
+        C8 --> C9[src/models/predict.py<br/>→ anomalies.csv]
+        C9 --> C10[src/models/explain_anomalies.py<br/>→ anomalies_explained.csv]
+        C10 --> C11{USE_S3?}
+        C11 -->|true| C12[boto3.upload_file<br/>processed/*.csv to S3]
     end
 
-    style H fill:#e1f5ff,stroke:#0066cc
-    style I fill:#ffe1e1,stroke:#cc0000
-    style K fill:#e1ffe1,stroke:#00aa00
+    %% MLflow Details 
+    C7 --> D[MLflow Registry]
+    subgraph D [mlruns/340127053401822666]
+        D1[Experiment: qa-log-anomaly-detector]
+        D1 --> D2[Run: params=model_type, features]
+        D1 --> D3[Metrics: training_rows]
+        D1 --> D4[Artifacts: model.pkl]
+        D1 --> D5[Registered Model Versions]
+    end
+
+    %% API Container Details
+    B7 --> E[qa-api Container]
+    subgraph E [Serving: docker/Dockerfile.api]
+        E1[uvicorn src.service.app:app] --> E2[joblib.load src/models/model.pkl]
+        E1 --> E3[GET /health]
+        E1 --> E4[POST /predict_anomaly<br/>LogRequest: rpm, error_rate, avg_size]
+        E1 --> E5[POST /detect<br/>reads anomalies_explained.csv]
+        E5 --> E6[Return: total_anomalies + sample]
+    end
+
+    %% Docker Compose Runtime
+    F[docker-compose.yml] --> G[services.pipeline<br/>depends_on]
+    G --> H[services.api<br/>port 8000:8000]
+    G -.volumes.-> I[./data:/app/data<br/>./mlruns:/app/mlruns<br/>./src/models:/app/src/models]
+    H -.volumes.-> I
+
+    %% Data Flow Files
+    subgraph I [Shared Volumes]
+        I1[data/raw/NASA_Jul95.gz]
+        I2[data/processed/clean_logs.csv]
+        I3[data/processed/features.csv]
+        I4[data/processed/anomalies.csv]
+        I5[data/processed/anomalies_explained.csv]
+        I6[src/models/model.pkl]
+        I7[mlruns/]
+    end
+
+    %% Tests
+    B6 --> J[tests/]
+    subgraph J [pytest]
+        J1[test_api.py → TestClient]
+        J2[test_data_validation.py]
+        J3[test_feature_validation.py]
+        J4[test_isolation_forest.py]
+        J5[test_explanation_logic.py]
+    end
+
+    %% Current Limitations 
+    C7 -.uses.-> K[sqlite:///mlflow.db<br/>Not Postgres]
+    E2 -.loads local.-> L[src/models/model.pkl<br/>Not from MLflow Registry]
+
+    %% Styling
+    style B fill:#f9f,stroke:#333,stroke-width:2px
+    style C fill:#e1f5ff,stroke:#0066cc,stroke-width:2px
+    style D fill:#ffe1e1,stroke:#cc0000,stroke-width:2px
+    style E fill:#e1ffe1,stroke:#00aa00,stroke-width:2px
+    style K fill:#ffcccc,stroke:#990000,stroke-dasharray: 5 5
+    style L fill:#ffcccc,stroke:#990000,stroke-dasharray: 5 5
 
 
 **Key Features**:
