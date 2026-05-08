@@ -1,4 +1,4 @@
-version: "3.9"
+
 
 services:
 
@@ -10,6 +10,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./mlruns:/app/mlruns
+      - ./src/models:/app/src/models
     command: python run_pipeline.py
 
   api:
@@ -22,5 +23,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./mlruns:/app/mlruns
+      - ./src/models:/app/src/models
     depends_on:
       - pipeline
