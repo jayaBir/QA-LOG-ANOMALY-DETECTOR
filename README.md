@@ -1,4 +1,4 @@
-**QA Log Anomaly Detection Service**
+**Log Anomaly Detection Service**
 
 Real-time + batch anomaly detection for web server logs using Isolation Forest. Built with MLOps best practices: automated training, experiment tracking, model registry, containerized serving, and CI/CD.
 
@@ -6,6 +6,8 @@ Stack: Python, FastAPI, scikit-learn, MLflow, Docker, GitHub Actions, AWS S3
 
 
 **Architecture**
+
+
 graph TD
     %% CI/CD Entry
     A[Git Push / PR] --> B[GitHub Actions: ci.yml]
@@ -176,6 +178,7 @@ CI/CD Flow
 Note: CI uses sample data to keep runs < 5 min. Full S3 training is manual or scheduled.
 
 **Data Flow**
+
 1. Raw: NASA_Jul95 web logs or sample_logs.txt
 2. Parsed: clean_logs.csv - host, timestamp, method, url, status, size
 3. Features: features.csv - aggregated per host: requests_per_minute, error_rate, avg_response_size
@@ -183,12 +186,14 @@ Note: CI uses sample data to keep runs < 5 min. Full S3 training is manual or sc
 5. Explained: anomalies_explained.csv - added explanation with z-score reasons
    
 **Model Details**
+
 Algorithm: sklearn.ensemble.IsolationForest
 Contamination: 0.05 = expects 5% anomalies
 Features: 3 engineered metrics per host per minute
 Explainability: Flags any feature with |z-score| >= 3.0 as abnormal_feature
 
 **Testing**
+
 pytest -v
 Coverage:
 •	test_api.py - Endpoint status + schema
@@ -198,18 +203,24 @@ Coverage:
 •	test_explanation_logic.py - Z-score explanations are statistically valid
 
 **Deployment**
+
 Current: EC2 running Docker containers built by CI.
+
 **Recommended next steps:**
+
 •	Point MLflow to remote Postgres instead of sqlite:///mlflow.db
 •	Load model in FastAPI via mlflow.pyfunc.load_model("models:/qa-log-anomaly-detector/Production")
 •	Add Prometheus metrics + Grafana dashboard
 •	Split CI: fast pr.yml for tests only, scheduled train.yml for S3 training
+
 **Environment Variables**
+
 Variable	Default	Description
 USE_S3	false	If true, downloads raw logs from S3 and uploads results
 AWS_ACCESS_KEY_ID	-	Required if USE_S3=true
 AWS_SECRET_ACCESS_KEY	-	Required if USE_S3=true
 MLFLOW_TRACKING_URI	sqlite:///mlflow.db	Set to remote server for prod
+
 **Limitations & Future Work**
 •	Drift Detection: No automated monitoring of input distribution shifts yet
 •	Rollback: Manual MLflow stage transition. No automated canary
