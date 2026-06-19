@@ -1,0 +1,23 @@
+artifact_path: file:///C:/Users/lenovo/qa-log-anomaly-detector/mlruns/1/models/m-1cb8d7d279454f58894989df8e894bb4/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.11.13
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.7.1
+    skops_trusted_types: null
+mlflow_version: 3.11.1
+model_id: m-1cb8d7d279454f58894989df8e894bb4
+model_size_bytes: 296430
+model_uuid: m-1cb8d7d279454f58894989df8e894bb4
+prompts: null
+run_id: 2d76fda937f04938a6f834486ec8cc89
+utc_time_created: '2026-05-25 11:50:02.304237'
