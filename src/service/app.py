@@ -4,20 +4,48 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import joblib
+import os
+
+try:
+    import mlflow
+    import mlflow.sklearn
+    MLFLOW_ENABLED = True
+except ImportError:
+    mlflow = None
+    MLFLOW_ENABLED = False
 
 app = FastAPI(title="Log Anomaly Detection Service")
 
 DATA_PATH = Path("data/processed/anomalies_explained.csv")
 MODEL_PATH = Path("src/models/model.pkl")
+DEFAULT_MODEL_URI = "models:/qa-log-anomaly-detector@production"
 
 # -----------------------
 # Load model once
 # -----------------------
 
-if MODEL_PATH.exists():
-    model = joblib.load(MODEL_PATH)
-else:
-    model = None
+def load_prediction_model():
+    model_uri = os.getenv("MLFLOW_MODEL_URI")
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
+    app_env = os.getenv("APP_ENV", "dev").lower()
+
+    if not model_uri and app_env == "prod":
+        model_uri = DEFAULT_MODEL_URI
+
+    if model_uri:
+        if not MLFLOW_ENABLED:
+            raise RuntimeError("MLflow is required to load MLFLOW_MODEL_URI")
+        if tracking_uri:
+            mlflow.set_tracking_uri(tracking_uri)
+        return mlflow.sklearn.load_model(model_uri)
+
+    if MODEL_PATH.exists():
+        return joblib.load(MODEL_PATH)
+
+    return None
+
+
+model = load_prediction_model()
 
 # -----------------------
 # Health

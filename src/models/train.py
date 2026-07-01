@@ -15,6 +15,8 @@ from src.models.isolation_forest import create_model
 
 INPUT_PATH = Path("data/processed/features.csv")
 MODEL_PATH = Path("src/models/model.pkl")
+EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "qa-log-anomaly-detector")
+REGISTERED_MODEL_NAME = os.getenv("MLFLOW_REGISTERED_MODEL_NAME", "qa-log-anomaly-detector")
 
 FEATURE_COLS = [
     "requests_per_minute",
@@ -22,21 +24,40 @@ FEATURE_COLS = [
     "avg_response_size"
 ]
 
+
+def configure_mlflow():
+    if not MLFLOW_ENABLED:
+        return
+
+    app_env = os.getenv("APP_ENV", "dev").lower()
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
+
+    if app_env == "prod" and not tracking_uri:
+        raise RuntimeError("MLFLOW_TRACKING_URI is required when APP_ENV=prod")
+
+    if tracking_uri:
+        print(f"Using MLflow Tracking URI: {tracking_uri}")
+        mlflow.set_tracking_uri(tracking_uri)
+    else:
+        db_path = Path.cwd() / "mlflow.db"
+        local_tracking_uri = f"sqlite:///{db_path.resolve()}"
+        print(f"Using local MLflow Tracking URI: {local_tracking_uri}")
+        mlflow.set_tracking_uri(local_tracking_uri)
+
+    print("Setting up MLflow experiment...")
+    mlflow.set_experiment(EXPERIMENT_NAME)
+
+
 def train_model():
     print("Loading features...")
     df = pd.read_csv(INPUT_PATH)
     X = df[FEATURE_COLS]
 
-    if MLFLOW_ENABLED:
-        # Use sqlite backend instead of file store to avoid CI permission issues
-        db_path = Path.cwd() / "mlflow.db"
-        mlflow.set_tracking_uri(f"sqlite:///{db_path.resolve()}")
-        
-        print("Setting up MLflow experiment...")
-        mlflow.set_experiment("qa-log-anomaly-detector")
+    configure_mlflow()
 
     if MLFLOW_ENABLED:
         with mlflow.start_run():
+
             print("Creating Isolation Forest model...")
             model = create_model()
 
@@ -44,23 +65,25 @@ def train_model():
             model.fit(X)
 
             print("Logging to MLflow...")
-            # Log params
+
+            # Parameters
             mlflow.log_param("model_type", "IsolationForest")
             mlflow.log_param("features", FEATURE_COLS)
             mlflow.log_param("num_features", len(FEATURE_COLS))
 
-            # Log metrics
+            # Metrics
             mlflow.log_metric("training_rows", len(X))
 
-            # Let MLflow handle model saving + logging as artifact
+            # Log model artifact
             mlflow.sklearn.log_model(
                 sk_model=model,
-                artifact_path="model",
-                registered_model_name="qa-log-anomaly-detector"
+                name="model",
+                registered_model_name=REGISTERED_MODEL_NAME
             )
 
-            # Also save locally for predict.py to use
+            # Save model locally for API usage
             MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+
             print("Saving model locally...")
             joblib.dump(model, MODEL_PATH)
 
@@ -78,7 +101,9 @@ def train_model():
 
         print("Saving model...")
         joblib.dump(model, MODEL_PATH)
+
         print(f"Model saved at {MODEL_PATH}")
+
 
 if __name__ == "__main__":
     train_model()

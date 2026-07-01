@@ -1,16 +1,43 @@
-
-
 services:
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mlflow
+    container_name: mlflow-server
+    environment:
+      MLFLOW_BACKEND_STORE_URI: ${MLFLOW_BACKEND_STORE_URI:-sqlite:////mlflow/mlflow.db}
+      MLFLOW_ARTIFACT_ROOT: ${MLFLOW_ARTIFACT_ROOT:-/mlruns}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-southeast-2}
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/mlruns
+      - ./mlflow:/mlflow
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   pipeline:
     build:
       context: .
       dockerfile: docker/pipeline.Dockerfile
     container_name: qa-pipeline
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-qa-log-anomaly-detector}
+      MLFLOW_REGISTERED_MODEL_NAME: ${MLFLOW_REGISTERED_MODEL_NAME:-qa-log-anomaly-detector}
     volumes:
       - ./data:/app/data
       - ./mlruns:/app/mlruns
       - ./src/models:/app/src/models
+    depends_on:
+      mlflow:
+        condition: service_healthy
     command: python run_pipeline.py
 
   api:
@@ -18,6 +45,10 @@ services:
       context: .
       dockerfile: docker/Dockerfile.api
     container_name: qa-api
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_MODEL_URI: ${MLFLOW_MODEL_URI:-}
     ports:
       - "8000:8000"
     volumes:
@@ -25,4 +56,5 @@ services:
       - ./mlruns:/app/mlruns
       - ./src/models:/app/src/models
     depends_on:
-      - pipeline
+      pipeline:
+        condition: service_completed_successfully
