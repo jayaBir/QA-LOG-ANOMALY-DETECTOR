@@ -1,231 +1,421 @@
-**Log Anomaly Detection Service**
+# Log Anomaly Detection Service
 
-Real-time + batch anomaly detection for web server logs using Isolation Forest. Built with MLOps best practices: automated training, experiment tracking, model registry, containerized serving, and CI/CD.
+An end-to-end MLOps project for real-time and batch anomaly detection on web server logs using Isolation Forest. The project demonstrates a production-inspired machine learning workflow including automated data ingestion, feature engineering, feature drift detection, experiment tracking, model versioning, containerized deployment, and CI/CD.
 
-Stack: Python, FastAPI, scikit-learn, MLflow, Docker, GitHub Actions, AWS S3
+**Tech Stack:** Python, FastAPI, scikit-learn, MLflow, Docker, GitHub Actions, AWS S3
 
+## Highlights
 
-**Architecture**
+- End-to-end automated training pipeline orchestrated with Docker Compose
+- MLflow experiment tracking and model registry
+- Automated feature drift detection using Population Stability Index (PSI) and mean shift analysis
+- Batch and real-time anomaly detection with FastAPI
+- AWS S3 integration for cloud-based data ingestion and artifact storage
+- Dockerized services for training, MLflow tracking, and API serving
+- GitHub Actions CI pipeline with automated testing and image builds
 
+## Architecture
+
+```mermaid
 graph TD
 
-    %% CI/CD Entry
-    A[Git Push / PR] --> B[GitHub Actions: ci.yml]
-    B --> B1[Setup Python 3.10]
-    B1 --> B2[pip install -r requirements.txt]
-    B2 --> B3[docker build -f docker/pipeline.Dockerfile]
-    B3 --> B4[docker run qa-pipeline]
-    B4 --> B5[python run_pipeline.py]
-    B5 --> B6[pytest]
-    B6 --> B7[docker build -f docker/Dockerfile.api]
+%% CI/CD
+A[Git Push / Pull Request] --> B[GitHub Actions]
+B --> C[Install Dependencies]
+C --> D[Run Tests]
+D --> E[Build Docker Images]
 
-    %% Pipeline Container Details
-    B4 --> C[qa-pipeline Container]
-    subgraph C [Training: docker/pipeline.Dockerfile]
-        C1{USE_S3 env?} -->|false| C2[data/raw/sample_logs.txt]
-        C1 -->|true| C3[S3: raw/sample_logs.txt<br/>boto3.download_file]
-        C2 --> C4[src/parser/log_parser.py<br/>→ clean_logs.csv]
-        C3 --> C4
-        C4 --> C5[src/features/feature_builder.py<br/>→ features.csv]
-        C5 --> C6[src/models/train.py<br/>IsolationForest]
-        C6 --> C7[MLflow: sqlite:///mlflow.db<br/>log_model + register]
-        C6 --> C8[joblib.dump → src/models/model.pkl]
-        C8 --> C9[src/models/predict.py<br/>→ anomalies.csv]
-        C9 --> C10[src/models/explain_anomalies.py<br/>→ anomalies_explained.csv]
-        C10 --> C11{USE_S3?}
-        C11 -->|true| C12[boto3.upload_file<br/>processed/*.csv to S3]
-    end
+%% Docker Compose
+E --> F[docker-compose]
+F --> G[MLflow Tracking Server]
+F --> H[Training Pipeline]
+F --> I[FastAPI Service]
 
-    %% MLflow Details 
-    C7 --> D[MLflow Registry]
-    subgraph D [mlruns/340127053401822666]
-        D1[Experiment: qa-log-anomaly-detector]
-        D1 --> D2[Run: params=model_type, features]
-        D1 --> D3[Metrics: training_rows]
-        D1 --> D4[Artifacts: model.pkl]
-        D1 --> D5[Registered Model Versions]
-    end
+%% Pipeline
+subgraph Pipeline
+    H1{USE_S3?}
+    H1 -->|Yes| H2[Download Logs from AWS S3]
+    H1 -->|No| H3[Load Local Sample Logs]
+    H2 --> H4[Log Parsing]
+    H3 --> H4
+    H4 --> H5[Feature Engineering]
+    H5 --> H6[Feature Drift Detection]
+    H6 --> H7[Train Isolation Forest]
+    H7 --> H8[Log Parameters & Metrics]
+    H8 --> H9[Register Model in MLflow]
+    H7 --> H10[Save model.pkl]
+    H10 --> H11[Batch Prediction]
+    H11 --> H12[Generate Explanations]
+    H12 --> H13[Generate drift_report.json]
+    H13 --> H14{USE_S3?}
+    H14 -->|Yes| H15[Upload Results to S3]
+end
 
-    %% API Container Details
-    B7 --> E[qa-api Container]
-    subgraph E [Serving: docker/Dockerfile.api]
-        E1[uvicorn src.service.app:app] --> E2[joblib.load src/models/model.pkl]
-        E1 --> E3[GET /health]
-        E1 --> E4[POST /predict_anomaly<br/>LogRequest: rpm, error_rate, avg_size]
-        E1 --> E5[POST /detect<br/>reads anomalies_explained.csv]
-        E5 --> E6[Return: total_anomalies + sample]
-    end
+%% MLflow
+subgraph MLflow
+    G --> M1[Experiments]
+    G --> M2[Runs]
+    G --> M3[Metrics]
+    G --> M4[Artifacts]
+    G --> M5[Model Registry]
+end
 
-    %% Docker Compose Runtime
-    F[docker-compose.yml] --> G[services.pipeline<br/>depends_on]
-    G --> H[services.api<br/>port 8000:8000]
-    G -.volumes.-> I[./data:/app/data<br/>./mlruns:/app/mlruns<br/>./src/models:/app/src/models]
-    H -.volumes.-> I
+H8 --> G
+H9 --> G
 
-    %% Data Flow Files
-    subgraph I [Shared Volumes]
-        I1[data/raw/NASA_Jul95.gz]
-        I2[data/processed/clean_logs.csv]
-        I3[data/processed/features.csv]
-        I4[data/processed/anomalies.csv]
-        I5[data/processed/anomalies_explained.csv]
-        I6[src/models/model.pkl]
-        I7[mlruns/]
-    end
+%% API
+subgraph FastAPI
+    I --> P1[GET /health]
+    I --> P2[POST /predict_anomaly]
+    I --> P3[POST /detect]
+    I --> P4[GET /drift]
+    I --> P5[Load model.pkl]
+end
 
-    %% Tests
-    B6 --> J[tests/]
-    subgraph J [pytest]
-        J1[test_api.py → TestClient]
-        J2[test_data_validation.py]
-        J3[test_feature_validation.py]
-        J4[test_isolation_forest.py]
-        J5[test_explanation_logic.py]
-    end
+%% Shared Storage
+subgraph Shared Files
+    S1[clean_logs.csv]
+    S2[features.csv]
+    S3[anomalies.csv]
+    S4[anomalies_explained.csv]
+    S5[drift_report.json]
+    S6[model.pkl]
+end
 
-    %% Current Limitations 
-    C7 -.uses.-> K[sqlite:///mlflow.db<br/>Not Postgres]
-    E2 -.loads local.-> L[src/models/model.pkl<br/>Not from MLflow Registry]
+H10 --> S6
+H11 --> S3
+H12 --> S4
+H13 --> S5
+H5 --> S2
+H4 --> S1
+P5 --> S6
+P3 --> S4
+P4 --> S5
 
-    %% Styling
-    style B fill:#f9f,stroke:#333,stroke-width:2px
-    style C fill:#e1f5ff,stroke:#0066cc,stroke-width:2px
-    style D fill:#ffe1e1,stroke:#cc0000,stroke-width:2px
-    style E fill:#e1ffe1,stroke:#00aa00,stroke-width:2px
-    style K fill:#ffcccc,stroke:#990000,stroke-dasharray: 5 5
-    style L fill:#ffcccc,stroke:#990000,stroke-dasharray: 5 5
+%% Styling
+style G fill:#ffe6e6,stroke:#cc0000,stroke-width:2px
+style H fill:#e6f3ff,stroke:#0066cc,stroke-width:2px
+style I fill:#e8ffe8,stroke:#009933,stroke-width:2px
+```
 
+## Key Features
 
-**Key Features**:
-•	Automated Pipeline: run_pipeline.py orchestrates end-to-end flow
-•	Dual Data Mode: sample_logs.txt for CI, S3 for production training via USE_S3=true
-•	Experiment Tracking: All runs logged to MLflow with params, metrics, artifacts
-•	Model Registry: Models versioned in MLflow as qa-log-anomaly-detector
-•	Serving: FastAPI with /health, /predict_anomaly real-time, /detect batch endpoints
-•	Explainability: Z-score based feature attribution for each anomaly
-•	CI/CD: GitHub Actions runs tests + builds Docker images on every PR
+- **End-to-End Pipeline:** `run_pipeline.py` orchestrates log parsing, feature engineering, drift detection, model training, prediction, and explainability.
+- **Dual Data Mode:** Supports local sample logs for development and CI, or AWS S3 for production-scale data using `USE_S3=true`.
+- **Automated Drift Detection:** Detects feature drift using Population Stability Index (PSI) and mean shift analysis, generates a drift report, and exposes results via the API.
+- **Experiment Tracking:** Logs parameters, metrics, artifacts, and model versions to an MLflow Tracking Server.
+- **Model Registry:** Automatically registers new versions of the `qa-log-anomaly-detector` model in MLflow.
+- **Batch & Real-Time Inference:** FastAPI provides `/predict_anomaly` for real-time predictions, `/detect` for batch anomaly results, and `/drift` for drift monitoring.
+- **Explainability:** Generates human-readable explanations for detected anomalies using Z-score based feature attribution.
+- **Containerized Deployment:** Docker Compose orchestrates the training pipeline, MLflow Tracking Server, and FastAPI service.
+- **CI/CD:** GitHub Actions automatically runs tests and builds Docker images on every push and pull request.
 
 
-**Project Structure**
-├── .github/workflows/ci.yml     # CI: test, train on sample, build images
+## Project Structure
+
+```text
+.
+├── .github/
+│   └── workflows/
+│       └── ci.yml                    # CI pipeline
 ├── data/
-│   ├── raw/sample_logs.txt      # Small dataset for CI
-│   └── processed/               # Clean logs, features, anomalies
+│   ├── raw/
+│   │   └── sample_logs.txt           # Sample dataset for local development & CI
+│   ├── processed/                    # Generated features, predictions & reports
+│   └── reference/                    # Drift detection baseline (auto-generated)
 ├── docker/
-│   ├── Dockerfile.api           # FastAPI serving container
-│   └── pipeline.Dockerfile      # Training pipeline container  
+│   ├── Dockerfile.api                # FastAPI service
+│   ├── Dockerfile.mlflow             # MLflow Tracking Server
+│   └── pipeline.Dockerfile           # Training pipeline
 ├── src/
-│   ├── parser/log_parser.py     # NASA log format → CSV
-│   ├── features/feature_builder.py  # rpm, error_rate, avg_response_size
+│   ├── parser/
+│   │   └── log_parser.py
+│   ├── features/
+│   │   └── feature_builder.py
 │   ├── models/
-│   │   ├── train.py             # IsolationForest + MLflow logging
-│   │   ├── predict.py           # Batch inference
-│   │   └── explain_anomalies.py # Z-score explainability
-│   ├── service/app.py           # FastAPI app
-│   └── utils/s3_utils.py        # S3 upload/download
-├── tests/                       # pytest: API, data, model, feature tests
-├── mlruns/                      # MLflow local tracking
-├── run_pipeline.py              # Main orchestrator
-└── docker-compose.yml           # Local: pipeline + API
+│   │   ├── train.py                  # Isolation Forest + MLflow logging
+│   │   ├── predict.py                # Batch inference
+│   │   ├── explain_anomalies.py      # Z-score based explainability
+│   │   └── isolation_forest.py
+│   ├── monitoring/
+│   │   └── drift_detection.py        # PSI & mean-shift based drift monitoring
+│   ├── service/
+│   │   └── app.py                    # FastAPI application
+│   └── utils/
+│       └── s3_utils.py               # AWS S3 integration
+├── tests/                            # Unit tests
+├── run_pipeline.py                   # End-to-end training pipeline
+├── docker-compose.yml                # Pipeline + MLflow + API services
+└── README.md
+```
 
-Quick Start
-1. Local Development
- **Install deps**
+## Quick Start
+
+### 1. Local Development
+
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
+```
 
- **Run full pipeline on sample data**
+Run the complete training pipeline:
+
+```bash
 python run_pipeline.py
+```
 
- **Start API**
+Start the FastAPI service:
 
+```bash
 uvicorn src.service.app:app --reload
+```
 
- Visit http://localhost:8000/docs
+API Documentation:
 
-2. Docker Compose
+```
+http://localhost:8000/docs
+```
 
-docker-compose up --build
-# Pipeline runs first, then API starts on :8000
+---
 
-3. Production Training with S3
+### 2. Run with Docker Compose
 
+Build and start all services:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- MLflow Tracking Server
+- Training Pipeline
+- FastAPI Service
+
+The pipeline completes before the API becomes available.
+
+---
+
+### 3. Train Using AWS S3
+
+Configure your AWS credentials:
+
+```bash
+aws configure
+```
+
+Enable S3 mode:
+
+```bash
+# Windows PowerShell
+$env:USE_S3="true"
+
+# Linux / macOS
 export USE_S3=true
-export AWS_ACCESS_KEY_ID=xxx
-export AWS_SECRET_ACCESS_KEY=xxx
+```
+
+Run the pipeline:
+
+```bash
 python run_pipeline.py
-API Endpoints
-Endpoint	Method	Description
-/health	GET	Liveness check. Returns {"status": "ok"}
-/predict_anomaly	POST	Real-time scoring. Body: {"requests_per_minute": 120, "error_rate": 0.05, "avg_response_size": 5000}
-/detect?limit=10	POST	Returns latest anomalies from batch run with explanations
+```
+
+The pipeline will:
+
+- Download raw logs from S3
+- Train the model
+- Detect feature drift
+- Register a new MLflow model version
+- Generate anomaly reports
+- Upload outputs back to S3
+
+---
+
+# API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Service health check |
+| `/predict_anomaly` | POST | Real-time anomaly prediction |
+| `/detect?limit=10` | POST | Returns latest batch anomalies with explanations |
+| `/drift` | GET | Returns the latest feature drift report |
 
 Example:
-curl -X POST "http://localhost:8000/predict_anomaly" -H "Content-Type: application/json" -d '{"requests_per_minute": 500, "error_rate": 0.8, "avg_response_size": 100}'
-MLflow Tracking
-All training runs are logged. For local demos, start the shared MLflow server first:
+
+```bash
+curl -X POST http://localhost:8000/predict_anomaly \
+-H "Content-Type: application/json" \
+-d '{
+  "requests_per_minute":500,
+  "error_rate":0.8,
+  "avg_response_size":100
+}'
+```
+
+---
+
+# MLflow Tracking
+
+Start the MLflow Tracking Server:
+
+```bash
 docker compose up mlflow -d
-# Open http://localhost:5000
+```
 
-Local Python runs automatically use http://localhost:5000 when that server is healthy.
-If the server is not running, training falls back to sqlite:///mlflow.db for offline dev/tests.
-Registered Model: qa-log-anomaly-detector
+Open:
 
-Stages: None → Staging → Production. Promote via MLflow UI or API.
-CI/CD Flow
+```
+http://localhost:5000
+```
 
-.github/workflows/ci.yml triggers on main push + PR:
-•	pytest - Runs all tests in tests/
-•	python run_pipeline.py - Trains on data/raw/sample_logs.txt
-•	docker build - Builds qa-pipeline + qa-api images
+Every training run logs:
 
-Note: CI uses sample data to keep runs < 5 min. Full S3 training is manual or scheduled.
+- Parameters
+- Metrics
+- Artifacts
+- Registered Model Versions
 
-**Data Flow**
+Registered Model:
 
-1. Raw: NASA_Jul95 web logs or sample_logs.txt
-2. Parsed: clean_logs.csv - host, timestamp, method, url, status, size
-3. Features: features.csv - aggregated per host: requests_per_minute, error_rate, avg_response_size
-4. Anomalies: anomalies.csv - added is_anomaly, anomaly_score
-5. Explained: anomalies_explained.csv - added explanation with z-score reasons
-   
-**Model Details**
+```
+qa-log-anomaly-detector
+```
 
-Algorithm: sklearn.ensemble.IsolationForest
-Contamination: 0.05 = expects 5% anomalies
-Features: 3 engineered metrics per host per minute
-Explainability: Flags any feature with |z-score| >= 3.0 as abnormal_feature
+Local Python runs automatically connect to the MLflow Tracking Server when available. If the server is unavailable, training falls back to a local SQLite backend for offline development.
 
-**Testing**
+---
 
+# CI/CD
+
+GitHub Actions automatically runs on every push and pull request.
+
+The workflow:
+
+1. Install dependencies
+2. Run unit tests
+3. Execute the training pipeline using sample data
+4. Build Docker images
+
+Using the sample dataset keeps CI execution fast while production-scale training is performed using AWS S3.
+
+---
+
+# Data Flow
+
+```
+Raw Logs
+      │
+      ▼
+Log Parser
+      │
+      ▼
+clean_logs.csv
+      │
+      ▼
+Feature Engineering
+      │
+      ▼
+features.csv
+      │
+      ▼
+Feature Drift Detection
+      │
+      ▼
+drift_report.json
+      │
+      ▼
+Isolation Forest Training
+      │
+      ▼
+MLflow Tracking & Model Registry
+      │
+      ▼
+Batch Prediction
+      │
+      ▼
+anomalies.csv
+      │
+      ▼
+Explainability
+      │
+      ▼
+anomalies_explained.csv
+```
+
+---
+
+# Model Details
+
+**Algorithm**
+
+- Isolation Forest (`sklearn.ensemble.IsolationForest`)
+
+**Features**
+
+- Requests Per Minute
+- Error Rate
+- Average Response Size
+
+**Contamination**
+
+- 0.05 (approximately 5% expected anomalies)
+
+**Explainability**
+
+- Z-score based feature attribution
+- Features with |z-score| ≥ 3 are identified as primary anomaly contributors
+
+---
+
+# Testing
+
+Run all tests:
+
+```bash
 pytest -v
-Coverage:
-•	test_api.py - Endpoint status + schema
-•	test_data_validation.py - Schema, nulls, value ranges
-•	test_feature_validation.py - HTTP method/status validation
-•	test_isolation_forest.py - Anomaly rate + score sanity checks
-•	test_explanation_logic.py - Z-score explanations are statistically valid
+```
 
-**Deployment**
+Current test coverage includes:
 
-Current: EC2 running Docker containers built by CI.
+- API endpoints
+- Data validation
+- Feature engineering
+- Isolation Forest training
+- Explainability logic
+- Feature drift detection
 
-**Recommended next steps:**
+---
 
-•	Point MLflow to remote Postgres instead of sqlite:///mlflow.db
-•	Load model in FastAPI via mlflow.pyfunc.load_model("models:/qa-log-anomaly-detector/Production")
-•	Add Prometheus metrics + Grafana dashboard
-•	Split CI: fast pr.yml for tests only, scheduled train.yml for S3 training
+# Deployment
 
-**Environment Variables**
+Current deployment target:
 
-Variable	Default	Description
-USE_S3	false	If true, downloads raw logs from S3 and uploads results
-AWS_ACCESS_KEY_ID	-	Required if USE_S3=true
-AWS_SECRET_ACCESS_KEY	-	Required if USE_S3=true
-MLFLOW_TRACKING_URI	sqlite:///mlflow.db	Set to remote server for prod
+- Amazon EC2
+- Docker Compose
+- MLflow Tracking Server
+- FastAPI
 
-**Limitations & Future Work**
-•	Drift Detection: No automated monitoring of input distribution shifts yet
-•	Rollback: Manual MLflow stage transition. No automated canary
-•	Scale: Single EC2. For >1k RPS, move to ECS + auto-scaling
-•	Feature Store: Features recomputed each run. Consider Feast for reuse
+---
+
+# Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USE_S3` | `false` | Enable S3 input/output |
+| `AWS_ACCESS_KEY_ID` | — | AWS access key |
+| `AWS_SECRET_ACCESS_KEY` | — | AWS secret key |
+| `AWS_DEFAULT_REGION` | `ap-southeast-2` | AWS region |
+| `MLFLOW_TRACKING_URI` | `http://localhost:5000` (Docker) | MLflow Tracking Server |
+| `MLFLOW_EXPERIMENT_NAME` | `qa-log-anomaly-detector` | MLflow experiment |
+| `MLFLOW_REGISTERED_MODEL_NAME` | `qa-log-anomaly-detector` | Registered model name |
+
+---
+
+# Limitations & Future Work
+
+- **Model Serving:** FastAPI currently loads the locally saved `model.pkl`. Future versions can load models directly from the MLflow Model Registry.
+- **Monitoring:** Feature drift detection is batch-based. Integrating Prometheus and Grafana would enable real-time operational monitoring and alerting.
+- **Scalability:** The application currently targets a single EC2 instance. Production deployments can be scaled using ECS or Kubernetes with auto-scaling.
+- **Feature Store:** Features are recomputed for every training run. A dedicated feature store (e.g., Feast) would improve feature reuse and consistency.
+- **Model Rollback:** MLflow model promotion is currently manual. Automated deployment strategies such as canary or blue-green deployments can be added.
