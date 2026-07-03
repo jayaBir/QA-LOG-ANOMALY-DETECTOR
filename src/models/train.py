@@ -2,6 +2,8 @@ import pandas as pd
 import joblib
 from pathlib import Path
 import os
+from urllib.error import URLError
+from urllib.request import urlopen
 
 try:
     import mlflow
@@ -17,12 +19,21 @@ INPUT_PATH = Path("data/processed/features.csv")
 MODEL_PATH = Path("src/models/model.pkl")
 EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "qa-log-anomaly-detector")
 REGISTERED_MODEL_NAME = os.getenv("MLFLOW_REGISTERED_MODEL_NAME", "qa-log-anomaly-detector")
+DEFAULT_MLFLOW_SERVER_URI = os.getenv("DEFAULT_MLFLOW_SERVER_URI", "http://localhost:5000")
 
 FEATURE_COLS = [
     "requests_per_minute",
     "error_rate",
     "avg_response_size"
 ]
+
+
+def is_mlflow_server_available(tracking_uri):
+    try:
+        with urlopen(f"{tracking_uri.rstrip('/')}/health", timeout=2) as response:
+            return response.status == 200
+    except (OSError, URLError):
+        return False
 
 
 def configure_mlflow():
@@ -38,6 +49,9 @@ def configure_mlflow():
     if tracking_uri:
         print(f"Using MLflow Tracking URI: {tracking_uri}")
         mlflow.set_tracking_uri(tracking_uri)
+    elif is_mlflow_server_available(DEFAULT_MLFLOW_SERVER_URI):
+        print(f"Using local MLflow server: {DEFAULT_MLFLOW_SERVER_URI}")
+        mlflow.set_tracking_uri(DEFAULT_MLFLOW_SERVER_URI)
     else:
         db_path = Path.cwd() / "mlflow.db"
         local_tracking_uri = f"sqlite:///{db_path.resolve()}"

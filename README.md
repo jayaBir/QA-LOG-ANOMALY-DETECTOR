@@ -162,9 +162,12 @@ Endpoint	Method	Description
 Example:
 curl -X POST "http://localhost:8000/predict_anomaly" -H "Content-Type: application/json" -d '{"requests_per_minute": 500, "error_rate": 0.8, "avg_response_size": 100}'
 MLflow Tracking
-All training runs are logged. To view UI:
-mlflow ui --backend-store-uri sqlite:///mlflow.db
+All training runs are logged. For local demos, start the shared MLflow server first:
+docker compose up mlflow -d
 # Open http://localhost:5000
+
+Local Python runs automatically use http://localhost:5000 when that server is healthy.
+If the server is not running, training falls back to sqlite:///mlflow.db for offline dev/tests.
 Registered Model: qa-log-anomaly-detector
 
 Stages: None → Staging → Production. Promote via MLflow UI or API.
