@@ -8,3 +8,6 @@ notebooks/
 *.gz
 *.pkl
 data/raw/NASA_Jul95
+data/reference/
+mlflow.db
+mlflow/

@@ -5,6 +5,7 @@ import numpy as np
 from pathlib import Path
 import joblib
 import os
+import json
 
 try:
     import mlflow
@@ -18,6 +19,7 @@ app = FastAPI(title="Log Anomaly Detection Service")
 
 DATA_PATH = Path("data/processed/anomalies_explained.csv")
 MODEL_PATH = Path("src/models/model.pkl")
+DRIFT_REPORT_PATH = Path("data/processed/drift_report.json")
 DEFAULT_MODEL_URI = "models:/qa-log-anomaly-detector@production"
 
 # -----------------------
@@ -54,6 +56,15 @@ model = load_prediction_model()
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/drift")
+def drift_status():
+    if not DRIFT_REPORT_PATH.exists():
+        return {"status": "not_available", "error": "Drift report not found"}
+
+    with DRIFT_REPORT_PATH.open("r", encoding="utf-8") as report_file:
+        return json.load(report_file)
 
 # -----------------------
 # Batch Detection
