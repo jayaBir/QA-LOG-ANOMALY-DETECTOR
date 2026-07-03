@@ -10,8 +10,8 @@ import os
 
 USE_S3 = os.getenv("USE_S3", "false").lower() == "true"
 
-S3_BUCKET = "qa-log-anomaly-detector-jaya-752575507593-ap-southeast-2-an"
-S3_INPUT_KEY = "raw/sample_logs.txt"
+S3_BUCKET = os.getenv("S3_BUCKET", "qa-log-anomaly-detector-jaya-752575507593-ap-southeast-2-an")
+S3_INPUT_KEY = os.getenv("S3_INPUT_KEY", "raw/NASA_Jul95")
 
 S3_CLEAN_KEY = "processed/clean_logs.csv"
 S3_FEATURES_KEY = "processed/features.csv"
@@ -35,7 +35,7 @@ def run_pipeline():
     input_file = RAW_FILE
     if USE_S3:
         input_file = "data/raw/input_from_s3.txt"
-        print("Downloading input file from S3...")
+        print(f"Downloading input file from s3://{S3_BUCKET}/{S3_INPUT_KEY}...")
         download_file(S3_BUCKET, S3_INPUT_KEY, input_file)
 
     # Step 1: Parse logs
