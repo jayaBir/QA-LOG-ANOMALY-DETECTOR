@@ -11,3 +11,5 @@ data/raw/NASA_Jul95
 data/reference/
 mlflow.db
 mlflow/
+mlruns/
+data/raw/input_from_s3.txt

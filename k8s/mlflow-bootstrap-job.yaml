@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mlflow-model-bootstrap
+  namespace: qa-log-anomaly-detector
+  labels:
+    app.kubernetes.io/name: mlflow-model-bootstrap
+    app.kubernetes.io/part-of: qa-log-anomaly-detector
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mlflow-model-bootstrap
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap
+          image: ${API_IMAGE}
+          imagePullPolicy: IfNotPresent
+          command: ["python", "scripts/bootstrap_mlflow.py"]
+          env:
+            - name: APP_ENV
+              value: prod
+            - name: MLFLOW_REGISTERED_MODEL_NAME
+              value: qa-log-anomaly-detector
+            - name: MLFLOW_MODEL_ALIAS
+              value: production
+            - name: MLFLOW_TRACKING_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: qa-log-anomaly-config
+                  key: MLFLOW_TRACKING_URI
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: pipeline-data
+              mountPath: /app/data
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: pipeline-data
+          emptyDir: {}
+        - name: temporary-files
+          emptyDir: {}

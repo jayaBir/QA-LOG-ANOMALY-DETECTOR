@@ -1,0 +1,56 @@
+services:
+  mlflow:
+    image: ${MLFLOW_IMAGE:?MLFLOW_IMAGE must be set}
+    restart: unless-stopped
+    environment:
+      MLFLOW_BACKEND_STORE_URI: sqlite:////data/mlflow.db
+      MLFLOW_ARTIFACT_ROOT: /data/mlruns
+    volumes:
+      - mlflow-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  model-bootstrap:
+    image: ${API_IMAGE:?API_IMAGE must be set}
+    restart: "no"
+    user: "0"
+    environment:
+      APP_ENV: prod
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_REGISTERED_MODEL_NAME: qa-log-anomaly-detector
+      MLFLOW_MODEL_ALIAS: production
+    volumes:
+      - bootstrap-data:/app/data
+    command: python scripts/bootstrap_mlflow.py
+    depends_on:
+      mlflow:
+        condition: service_healthy
+
+  api:
+    image: ${API_IMAGE:?API_IMAGE must be set}
+    restart: unless-stopped
+    environment:
+      APP_ENV: prod
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_MODEL_URI: models:/qa-log-anomaly-detector@production
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      mlflow:
+        condition: service_healthy
+      model-bootstrap:
+        condition: service_completed_successfully
+
+volumes:
+  mlflow-data:
+  bootstrap-data:

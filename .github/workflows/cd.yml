@@ -1,0 +1,154 @@
+name: Continuous Deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        required: true
+        default: both
+        type: choice
+        options: [ec2, kubernetes, both]
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/qa-log-anomaly-detector
+
+jobs:
+  resolve-target:
+    name: Resolve deployment target
+    runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.target.outputs.target }}
+    steps:
+      - id: target
+        env:
+          DISPATCH_TARGET: ${{ inputs.target }}
+          DEFAULT_TARGET: ${{ vars.DEPLOY_TARGET }}
+        run: |
+          echo "target=${DISPATCH_TARGET:-${DEFAULT_TARGET:-ec2}}" >> "$GITHUB_OUTPUT"
+
+  build-and-push:
+    name: Build and publish images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: meta
+        run: echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.api
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ steps.meta.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:latest
+
+      - name: Build and push MLflow image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.mlflow
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-mlflow:${{ steps.meta.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-mlflow:latest
+
+  deploy-ec2:
+    name: Deploy to EC2
+    needs: [resolve-target, build-and-push]
+    if: needs.resolve-target.outputs.target == 'ec2' || needs.resolve-target.outputs.target == 'both'
+    runs-on: ubuntu-latest
+    environment: production-ec2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload production Compose configuration
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: docker-compose.prod.yml
+          target: ${{ secrets.EC2_APP_DIR }}
+
+      - name: Deploy immutable image and verify health
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          API_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ needs.build-and-push.outputs.image_tag }}
+          MLFLOW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-mlflow:${{ needs.build-and-push.outputs.image_tag }}
+          EC2_APP_DIR: ${{ secrets.EC2_APP_DIR }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USERNAME: ${{ github.repository_owner }}
+          API_PORT: ${{ vars.API_PORT }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: API_IMAGE,MLFLOW_IMAGE,EC2_APP_DIR,GHCR_TOKEN,GHCR_USERNAME,API_PORT
+          script_stop: true
+          script_path: scripts/deploy-ec2.sh
+
+  deploy-kubernetes:
+    name: Deploy to Kubernetes
+    needs: [resolve-target, build-and-push]
+    if: needs.resolve-target.outputs.target == 'kubernetes' || needs.resolve-target.outputs.target == 'both'
+    runs-on: ubuntu-latest
+    environment: production-kubernetes
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubectl
+        env:
+          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "$KUBECONFIG_CONTENT" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Deploy MLflow, bootstrap the model, and deploy API
+        env:
+          API_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ needs.build-and-push.outputs.image_tag }}
+          MLFLOW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-mlflow:${{ needs.build-and-push.outputs.image_tag }}
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/mlflow-pvc.yaml
+          kubectl apply -f k8s/mlflow-service.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/pod-disruption-budget.yaml
+          envsubst < k8s/mlflow-deployment.yaml | kubectl apply -f -
+          kubectl -n qa-log-anomaly-detector rollout status deployment/mlflow --timeout=180s
+          kubectl -n qa-log-anomaly-detector delete job mlflow-model-bootstrap --ignore-not-found --wait=true
+          envsubst < k8s/mlflow-bootstrap-job.yaml | kubectl apply -f -
+          kubectl -n qa-log-anomaly-detector wait --for=condition=complete job/mlflow-model-bootstrap --timeout=300s
+          envsubst < k8s/deployment.yaml | kubectl apply -f -
+          kubectl -n qa-log-anomaly-detector rollout status deployment/qa-log-anomaly-api --timeout=180s

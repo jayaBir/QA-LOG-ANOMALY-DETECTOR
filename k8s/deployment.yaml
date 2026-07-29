@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qa-log-anomaly-api
+  namespace: qa-log-anomaly-detector
+  labels:
+    app.kubernetes.io/name: qa-log-anomaly-api
+    app.kubernetes.io/part-of: qa-log-anomaly-detector
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: qa-log-anomaly-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: qa-log-anomaly-api
+        app.kubernetes.io/part-of: qa-log-anomaly-detector
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: ${API_IMAGE}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: APP_ENV
+              value: prod
+            - name: MLFLOW_TRACKING_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: qa-log-anomaly-config
+                  key: MLFLOW_TRACKING_URI
+            - name: MLFLOW_MODEL_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: qa-log-anomaly-config
+                  key: MLFLOW_MODEL_URI
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            timeoutSeconds: 3
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: temporary-files
+          emptyDir: {}
