@@ -18,7 +18,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository_owner }}/qa-log-anomaly-detector
+  IMAGE_PREFIX: jayabir/qa-log-anomaly-detector
 
 jobs:
   resolve-target:
@@ -104,7 +104,7 @@ jobs:
           MLFLOW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-mlflow:${{ needs.build-and-push.outputs.image_tag }}
           EC2_APP_DIR: ${{ secrets.EC2_APP_DIR }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          GHCR_USERNAME: ${{ github.repository_owner }}
+          GHCR_USERNAME: jayabir
           API_PORT: ${{ vars.API_PORT }}
         with:
           host: ${{ secrets.EC2_HOST }}
