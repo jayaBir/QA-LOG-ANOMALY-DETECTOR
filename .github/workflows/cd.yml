@@ -113,6 +113,7 @@ jobs:
           envs: API_IMAGE,MLFLOW_IMAGE,EC2_APP_DIR,GHCR_TOKEN,GHCR_USERNAME,API_PORT
           script_stop: true
           script_path: scripts/deploy-ec2.sh
+          command_timeout: 20m
 
   deploy-kubernetes:
     name: Deploy to Kubernetes
