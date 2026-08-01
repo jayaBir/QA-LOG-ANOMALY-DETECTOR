@@ -1,5 +1,11 @@
-"""Verify that an explicitly approved serving model is available in MLflow."""
+"""Verify that an approved serving model is available in MLflow.
+
+If the registry is empty, bootstrap the very first model automatically.
+Subsequent deployments still require an explicit production alias.
+"""
+
 import os
+import time
 
 import mlflow
 from mlflow import MlflowClient
@@ -19,22 +25,57 @@ def main():
     mlflow.set_tracking_uri(tracking_uri)
     client = MlflowClient(tracking_uri=tracking_uri)
 
+    # Production alias already exists
     try:
         current = client.get_model_version_by_alias(MODEL_NAME, MODEL_ALIAS)
-        print(f"{MODEL_NAME}@{MODEL_ALIAS} already points to version {current.version}; nothing to do.")
+        print(
+            f"{MODEL_NAME}@{MODEL_ALIAS} already points to version "
+            f"{current.version}; nothing to do."
+        )
         return
     except MlflowException:
         pass
 
     version = latest_version(client)
+
+    # First deployment: registry is empty
     if version is None:
-        raise RuntimeError(
-            f"No approved production model exists: {MODEL_NAME} has no registered versions. "
-            "Run the separate training and validation pipeline, then explicitly promote a version."
+        print("No registered model found.")
+        print("Running pipeline to create the initial production model...")
+
+        from run_pipeline import run_pipeline
+
+        run_pipeline()
+
+        # Wait for MLflow to register the model version
+        version = None
+        for _ in range(15):
+            version = latest_version(client)
+            if version is not None:
+                break
+            time.sleep(1)
+
+        if version is None:
+            raise RuntimeError(
+                "Pipeline completed, but no model version was registered."
+            )
+
+        client.set_registered_model_alias(
+            MODEL_NAME,
+            MODEL_ALIAS,
+            version.version,
         )
 
+        print(
+            f"Assigned '{MODEL_ALIAS}' alias to model version "
+            f"{version.version}."
+        )
+        return
+
+    # Existing model versions but no production alias
     raise RuntimeError(
-        f"{MODEL_NAME} has registered candidate version {version.version}, but no '{MODEL_ALIAS}' alias. "
+        f"{MODEL_NAME} has registered candidate version {version.version}, "
+        f"but no '{MODEL_ALIAS}' alias. "
         "Validate it and explicitly assign the production alias before deployment."
     )
 
