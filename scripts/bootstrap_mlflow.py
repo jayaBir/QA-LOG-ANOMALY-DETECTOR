@@ -1,3 +1,4 @@
+
 """Verify that an approved serving model is available in MLflow.
 
 If the registry is empty, bootstrap the very first model automatically.
@@ -5,11 +6,18 @@ Subsequent deployments still require an explicit production alias.
 """
 
 import os
+import sys
 import time
+from pathlib import Path
+
+# Add project root (/app) to Python's import path.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 import mlflow
 from mlflow import MlflowClient
 from mlflow.exceptions import MlflowException
+
 
 MODEL_NAME = os.getenv("MLFLOW_REGISTERED_MODEL_NAME", "qa-log-anomaly-detector")
 MODEL_ALIAS = os.getenv("MLFLOW_MODEL_ALIAS", "production")
