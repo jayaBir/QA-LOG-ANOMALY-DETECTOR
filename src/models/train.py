@@ -91,7 +91,7 @@ def train_model():
             # Log model artifact
             mlflow.sklearn.log_model(
                 sk_model=model,
-                name="model",
+                artifact_path="model",
                 registered_model_name=REGISTERED_MODEL_NAME
             )
 
