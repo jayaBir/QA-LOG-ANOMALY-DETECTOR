@@ -25,6 +25,7 @@ services:
       MLFLOW_MODEL_ALIAS: production
     volumes:
       - bootstrap-data:/app/data
+      - mlflow-data:/data
     command: python scripts/bootstrap_mlflow.py
     depends_on:
       mlflow:
@@ -37,6 +38,8 @@ services:
       APP_ENV: prod
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MLFLOW_MODEL_URI: models:/qa-log-anomaly-detector@production
+    volumes:
+     - mlflow-data:/data  
     ports:
       - "${API_PORT:-8000}:8000"
     healthcheck:
