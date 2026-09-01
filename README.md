@@ -10,7 +10,7 @@ An end-to-end MLOps project for real-time and batch anomaly detection on web ser
 - MLflow experiment tracking and model registry
 - Automated feature drift detection using Population Stability Index (PSI) and mean shift analysis
 - Batch and real-time anomaly detection with FastAPI
-- AWS S3 integration for cloud-based data ingestion and artifact storage
+- AWS S3 integration for cloud-based input and generated-output storage
 - Dockerized services for training, MLflow tracking, and API serving
 - GitHub Actions CI pipeline with automated testing and image builds
 
@@ -109,7 +109,7 @@ style L fill:#e8ffe8,stroke:#009933,stroke-width:2px
 - **Batch & Real-Time Inference:** FastAPI provides `/predict_anomaly` for real-time predictions, `/detect` for batch anomaly results, and `/drift` for drift monitoring.
 - **Explainability:** Generates human-readable explanations for detected anomalies using Z-score based feature attribution.
 - **Containerized Deployment:** Docker Compose orchestrates the training pipeline, MLflow Tracking Server, and FastAPI service.
-- **CI/CD:** GitHub Actions automatically runs tests and builds Docker images on every push and pull request.
+- **CI/CD:** GitHub Actions runs CI on pushes to `main` and pull requests, then publishes and deploys images from `main`.
 
 
 ## Project Structure
@@ -236,81 +236,29 @@ The pipeline will:
 # API Endpoints
 
 | Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Service health check |
-| `/predict_anomaly` | POST | Real-time anomaly prediction |
-| `/detect?limit=10` | POST | Returns latest batch anomalies with explanations |
-| `/drift` | GET | Returns the latest feature drift report |
-
-Example:
-
-
-curl -X POST "http://localhost:8000/predict_anomaly" -H "Content-Type: application/json" -d '{"requests_per_minute": 500, "error_rate": 0.8, "avg_response_size": 100}'
-MLflow Tracking
-All training runs are logged. For local demos, start the shared MLflow server first:
-docker compose up mlflow -d
-# Open http://localhost:5000
-
-Local Python runs automatically use http://localhost:5000 when that server is healthy.
-If the server is not running, training falls back to sqlite:///mlflow.db for offline dev/tests.
-Registered Model: qa-log-anomaly-detector
-
+| --- | --- | --- |
+| `/health` | GET | Liveness check. Returns `200` once the HTTP server accepts requests. |
+| `/predict_anomaly` | POST | Scores one feature vector. Returns `503` when the configured model is unavailable. |
+| `/detect?limit=10` | POST | Returns up to `limit` batch anomalies from `anomalies_explained.csv`. |
+| `/drift` | GET | Returns `drift_report.json`, or a `not_available` response when no report exists. |
 
 ```bash
 curl -X POST http://localhost:8000/predict_anomaly \
--H "Content-Type: application/json" \
--d '{
-  "requests_per_minute":500,
-  "error_rate":0.8,
-  "avg_response_size":100
-}'
+  -H "Content-Type: application/json" \
+  -d '{"requests_per_minute":500,"error_rate":0.8,"avg_response_size":100}'
 ```
 
----
+## MLflow Tracking
 
-# MLflow Tracking
+Start the local tracking server with `docker compose up mlflow -d`, then open <http://localhost:5000>. Local Python training uses that server when it is healthy; otherwise it falls back to `sqlite:///mlflow.db` for offline development.
 
-Start the MLflow Tracking Server:
+Training logs parameters, metrics, artifacts, and versions of the `qa-log-anomaly-detector` registered model. Production serving resolves the model assigned to its `production` alias.
 
-```bash
-docker compose up mlflow -d
-```
+## CI/CD
 
-Open:
+CI runs on every push to `main` and every pull request. It installs dependencies, builds and runs the pipeline image, runs the sample-data pipeline locally, executes `pytest`, and builds pipeline and API images.
 
-```
-http://localhost:5000
-```
-
-Every training run logs:
-
-- Parameters
-- Metrics
-- Artifacts
-- Registered Model Versions
-
-Registered Model:
-
-```
-qa-log-anomaly-detector
-```
-
-Local Python runs automatically connect to the MLflow Tracking Server when available. If the server is unavailable, training falls back to a local SQLite backend for offline development.
-
----
-
-# CI/CD
-
-GitHub Actions automatically runs on every push and pull request.
-
-The workflow:
-
-1. Install dependencies
-2. Run unit tests
-3. Execute the training pipeline using sample data
-4. Build Docker images
-
-Using the sample dataset keeps CI execution fast while production-scale training is performed using AWS S3.
+CD runs on pushes to `main`. It publishes immutable commit-SHA API and MLflow images to GHCR, then deploys to EC2, Kubernetes, or both according to `DEPLOY_TARGET` (default: `ec2`).
 
 ---
 
@@ -402,26 +350,28 @@ Current test coverage includes:
 
 # Deployment
 
-Current deployment target:
+Production supports EC2 Docker Compose and Kubernetes. The CD workflow publishes commit-SHA images and deploys the selected target; `docker-compose.prod.yml` starts MLflow, verifies or bootstraps the approved model, then starts the API. The EC2 deployment checks Docker storage before pulling and verifies `/health` after rollout.
 
-- Amazon EC2
-- Docker Compose
-- MLflow Tracking Server
-- FastAPI
+For required GitHub Environment secrets, target selection, first deployment, verification, and rollback, see [the production deployment guide](docs/DEPLOYMENT.md).
 
----
+## Environment Variables
 
-# Environment Variables
+Copy `.env.example` for local development. Do not commit credentials.
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `USE_S3` | `false` | Enable S3 input/output |
-| `AWS_ACCESS_KEY_ID` | — | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | — | AWS secret key |
-| `AWS_DEFAULT_REGION` | `ap-southeast-2` | AWS region |
-| `MLFLOW_TRACKING_URI` | `http://localhost:5000` (Docker) | MLflow Tracking Server |
-| `MLFLOW_EXPERIMENT_NAME` | `qa-log-anomaly-detector` | MLflow experiment |
-| `MLFLOW_REGISTERED_MODEL_NAME` | `qa-log-anomaly-detector` | Registered model name |
+| --- | --- | --- |
+| `APP_ENV` | `dev` | Use `prod` for production model resolution. |
+| `USE_S3` | `false` | Download pipeline input and upload generated outputs through S3. |
+| `AWS_DEFAULT_REGION` | `ap-southeast-2` | AWS region used by the S3 client. |
+| `S3_BUCKET` | Project bucket | Bucket containing input and generated pipeline files. |
+| `S3_INPUT_KEY` | `raw/NASA_Jul95` | Input log object key. |
+| `DEFAULT_MLFLOW_SERVER_URI` | `http://localhost:5000` | MLflow URI that local Python training probes before SQLite fallback. |
+| `MLFLOW_TRACKING_URI` | unset | Explicit MLflow tracking server URI. Required for production training. |
+| `MLFLOW_MODEL_URI` | unset | Model URI for the API; production defaults to `models:/qa-log-anomaly-detector@production`. |
+| `MLFLOW_EXPERIMENT_NAME` | `qa-log-anomaly-detector` | MLflow experiment name. |
+| `MLFLOW_REGISTERED_MODEL_NAME` | `qa-log-anomaly-detector` | MLflow registered-model name. |
+| `API_PORT` | `8000` | EC2 host port supplied by the CD environment. |
+| `MIN_DOCKER_FREE_MB` | `1024` | EC2 free-space reserve required before Docker pulls an image. |
 
 ---
 
