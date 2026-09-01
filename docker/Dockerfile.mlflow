@@ -9,6 +9,7 @@ EXPOSE 5000
 CMD mlflow server \
     --host 0.0.0.0 \
     --port 5000 \
+    --workers "${MLFLOW_WORKERS:-1}" \
     --allowed-hosts "*" \
     --backend-store-uri "${MLFLOW_BACKEND_STORE_URI:-sqlite:////mlflow/mlflow.db}" \
     --serve-artifacts \

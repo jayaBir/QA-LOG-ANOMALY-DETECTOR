@@ -5,14 +5,17 @@ services:
     environment:
       MLFLOW_BACKEND_STORE_URI: sqlite:////data/mlflow.db
       MLFLOW_ARTIFACT_ROOT: /data/mlruns
+      # SQLite is a single-node backend; one MLflow worker avoids needless
+      # memory pressure and concurrent SQLite writers on the EC2 instance.
+      MLFLOW_WORKERS: "1"
     volumes:
       - mlflow-data:/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"]
       interval: 10s
       timeout: 10s
-      retries: 30
-      start_period: 60s
+      retries: 36
+      start_period: 120s
 
   model-bootstrap:
     image: ${API_IMAGE:?API_IMAGE must be set}

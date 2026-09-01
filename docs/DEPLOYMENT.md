@@ -19,7 +19,7 @@ sudo chown <EC2_USER>:<EC2_USER> <EC2_APP_DIR>
 
 The deployment script installs Docker Engine and Docker Compose v2 if absent, uploads the Compose file, writes a mode-600 `.env` file from protected GitHub secrets, removes Docker images and build cache unused for seven days before pulling, verifies Docker's data filesystem has at least 1 GiB and 10,000 inodes free, then replaces the container and checks `/health` for up to two minutes. This prevents a new image layer from exhausting overlayfs during extraction. The SSH user must have passwordless `sudo` for first-time Docker installation, or Docker must already be usable by it.
 
-The EC2 Compose stack runs MLflow in its own persistent service. The API and model-bootstrap service use `http://mlflow:5000`, where `mlflow` is Docker Compose service DNS; do not override it with `localhost`.
+The EC2 Compose stack runs MLflow in its own persistent service. It uses one worker because its SQLite backend is a single-node store; this avoids concurrent SQLite writes and unnecessary memory pressure. The API and model-bootstrap service use `http://mlflow:5000`, where `mlflow` is Docker Compose service DNS; do not override it with `localhost`. If a Compose dependency fails, the deployment action prints the latest logs for MLflow, model bootstrap, and API services.
 
 ## GitHub Environments, secrets, and variables
 

@@ -112,7 +112,12 @@ export API_IMAGE
 export MLFLOW_IMAGE
 ensure_docker_space
 "${DOCKER[@]}" compose -f docker-compose.prod.yml pull
-"${DOCKER[@]}" compose -f docker-compose.prod.yml up -d --remove-orphans
+if ! "${DOCKER[@]}" compose -f docker-compose.prod.yml up -d --remove-orphans; then
+  echo "Compose startup failed; recent service logs follow." >&2
+  "${DOCKER[@]}" compose -f docker-compose.prod.yml ps >&2 || true
+  "${DOCKER[@]}" compose -f docker-compose.prod.yml logs --tail=200 mlflow model-bootstrap api >&2 || true
+  exit 1
+fi
 
 for attempt in {1..24}; do
   if curl --fail --silent --show-error --max-time 5 http://127.0.0.1:"${API_PORT:-8000}"/health >/dev/null; then
