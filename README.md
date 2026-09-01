@@ -20,17 +20,19 @@ An end-to-end MLOps project for real-time and batch anomaly detection on web ser
 graph TD
 
 %% CI/CD
-A[Git Push / Pull Request] --> B[GitHub Actions CI]
+A[Push to main] --> B[GitHub Actions CI]
+P[Pull Request] --> B
 B --> C[Install dependencies]
 C --> D[Run pipeline and tests]
 D --> E[Build Docker images]
-A --> F[Git push to main]
-F --> G[GitHub Actions CD]
-G --> H[Publish immutable API and MLflow images]
-H --> I[EC2 Docker Compose deployment]
+A --> F[GitHub Actions CD]
+F --> G[Publish immutable API and MLflow images]
+G --> H{Deployment target}
 
 %% Production services
-subgraph Production[Production Docker Compose]
+subgraph Production[Selected production target]
+    H -->|EC2| I[Deploy MLflow, bootstrap, and API]
+    H -->|Kubernetes| I
     I --> J[MLflow Tracking Server]
     J --> K[Model bootstrap]
     K --> L[FastAPI Service]
@@ -98,6 +100,8 @@ style J fill:#ffe6e6,stroke:#cc0000,stroke-width:2px
 style K fill:#e6f3ff,stroke:#0066cc,stroke-width:2px
 style L fill:#e8ffe8,stroke:#009933,stroke-width:2px
 ```
+
+The repository also contains `cd.yml` for image publishing and deployment, `docker-compose.prod.yml` for EC2, `k8s/` manifests for Kubernetes, `scripts/` deployment utilities, and `docs/DEPLOYMENT.md` for production setup and rollback.
 
 ## Key Features
 

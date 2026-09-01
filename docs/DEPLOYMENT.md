@@ -2,7 +2,7 @@
 
 ## Delivery flow
 
-The CD workflow builds the API image once per commit, publishes immutable commit-SHA and `latest` tags to GitHub Container Registry (GHCR), then deploys that same SHA-tagged image to EC2, Kubernetes, or both. It also builds the dedicated MLflow server image used by both targets. Training, model registration, and production promotion are never part of an application deployment.
+The CD workflow builds the API image once per commit, publishes immutable commit-SHA and `latest` tags to GitHub Container Registry (GHCR), then deploys that same SHA-tagged image to EC2, Kubernetes, or both. It also builds the dedicated MLflow server image used by both targets. A model-bootstrap step verifies the `production` alias; only when the registry is empty does it train, register, and assign the first production model. Deployments never promote an existing candidate model automatically.
 
 Select a target manually in **Actions → Continuous Deployment → Run workflow**: `ec2`, `kubernetes`, or `both`. For automatic releases on every push to `main`, create the GitHub repository/environment variable `DEPLOY_TARGET` with exactly one of those values. It defaults to `ec2`, preserving the EC2 release path.
 
@@ -72,7 +72,7 @@ kubectl -n qa-log-anomaly-detector create secret docker-registry ghcr-pull-secre
 
 `GHCR_READ_TOKEN` needs `read:packages`. It is a Kubernetes Secret, not a GitHub Actions secret. The supplied ConfigMap holds only non-sensitive MLflow connection settings. Put future AWS, database, or object-store credentials in dedicated Kubernetes Secrets.
 
-The model-bootstrap Job runs automatically after MLflow becomes healthy and before API rollout. It is read-only and idempotent: it exits successfully only when `qa-log-anomaly-detector@production` already exists. An empty registry fails with a clear error. A registry containing candidate versions but no `production` alias also fails: validate the candidate and explicitly promote it in the separate model-release process. No deployment script trains, registers, or promotes a model.
+The model-bootstrap Job runs automatically after MLflow becomes healthy and before API rollout. It is idempotent: when `qa-log-anomaly-detector@production` already exists, it makes no changes. On an empty registry, it runs the initial pipeline, registers the first model, and assigns the `production` alias. A registry containing candidate versions but no `production` alias still fails: validate the candidate and explicitly promote it in the separate model-release process.
 
 The Kubernetes API Deployment has labels/selectors, immutable SHA image injection, non-root security context, `readOnlyRootFilesystem`, readiness and liveness probes, resource requests/limits, a zero-unavailable rolling strategy, and a PodDisruptionBudget.
 
