@@ -20,19 +20,32 @@ An end-to-end MLOps project for real-time and batch anomaly detection on web ser
 graph TD
 
 %% CI/CD
-A[Git Push / Pull Request] --> B[GitHub Actions]
-B --> C[Install Dependencies]
-C --> D[Run Tests]
-D --> E[Build Docker Images]
+A[Git Push / Pull Request] --> B[GitHub Actions CI]
+B --> C[Install dependencies]
+C --> D[Run pipeline and tests]
+D --> E[Build Docker images]
+A --> F[Git push to main]
+F --> G[GitHub Actions CD]
+G --> H[Publish immutable API and MLflow images]
+H --> I[EC2 Docker Compose deployment]
 
-%% Docker Compose
-E --> F[docker-compose]
-F --> G[MLflow Tracking Server]
-F --> H[Training Pipeline]
-F --> I[FastAPI Service]
+%% Production services
+subgraph Production[Production Docker Compose]
+    I --> J[MLflow Tracking Server]
+    J --> K[Model bootstrap]
+    K --> L[FastAPI Service]
+    L --> L1[GET /health]
+    L --> L2[POST /predict_anomaly]
+    L --> L3[POST /detect]
+    L --> L4[GET /drift]
+end
+
+K -->|Ensures production alias exists| J
+K -->|Runs pipeline only when registry is empty| H1
+L -->|Loads qa-log-anomaly-detector@production| J
 
 %% Pipeline
-subgraph Pipeline
+subgraph Pipeline[Development and bootstrap training pipeline]
     H1{USE_S3?}
     H1 -->|Yes| H2[Download Logs from AWS S3]
     H1 -->|No| H3[Load Local Sample Logs]
@@ -53,24 +66,15 @@ end
 
 %% MLflow
 subgraph MLflow
-    G --> M1[Experiments]
-    G --> M2[Runs]
-    G --> M3[Metrics]
-    G --> M4[Artifacts]
-    G --> M5[Model Registry]
+    J --> M1[Experiments]
+    J --> M2[Runs]
+    J --> M3[Metrics]
+    J --> M4[Artifacts]
+    J --> M5[Model Registry]
 end
 
-H8 --> G
-H9 --> G
-
-%% API
-subgraph FastAPI
-    I --> P1[GET /health]
-    I --> P2[POST /predict_anomaly]
-    I --> P3[POST /detect]
-    I --> P4[GET /drift]
-    I --> P5[Load model.pkl]
-end
+H8 --> J
+H9 --> J
 
 %% Shared Storage
 subgraph Shared Files
@@ -88,14 +92,11 @@ H12 --> S4
 H13 --> S5
 H5 --> S2
 H4 --> S1
-P5 --> S6
-P3 --> S4
-P4 --> S5
 
 %% Styling
-style G fill:#ffe6e6,stroke:#cc0000,stroke-width:2px
-style H fill:#e6f3ff,stroke:#0066cc,stroke-width:2px
-style I fill:#e8ffe8,stroke:#009933,stroke-width:2px
+style J fill:#ffe6e6,stroke:#cc0000,stroke-width:2px
+style K fill:#e6f3ff,stroke:#0066cc,stroke-width:2px
+style L fill:#e8ffe8,stroke:#009933,stroke-width:2px
 ```
 
 ## Key Features
@@ -426,7 +427,7 @@ Current deployment target:
 
 # Limitations & Future Work
 
-- **Model Serving:** FastAPI currently loads the locally saved `model.pkl`. Future versions can load models directly from the MLflow Model Registry.
+- **Model Serving:** Production FastAPI instances load the model assigned to the MLflow `production` alias. Local development can use the saved `model.pkl` when no MLflow model URI is configured.
 - **Monitoring:** Feature drift detection is batch-based. Integrating Prometheus and Grafana would enable real-time operational monitoring and alerting.
 - **Scalability:** The application currently targets a single EC2 instance. Production deployments can be scaled using ECS or Kubernetes with auto-scaling.
 - **Feature Store:** Features are recomputed for every training run. A dedicated feature store (e.g., Feast) would improve feature reuse and consistency.
