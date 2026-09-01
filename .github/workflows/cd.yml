@@ -106,11 +106,12 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USERNAME: jayabir
           API_PORT: ${{ vars.API_PORT }}
+          MIN_DOCKER_FREE_MB: ${{ vars.MIN_DOCKER_FREE_MB }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: API_IMAGE,MLFLOW_IMAGE,EC2_APP_DIR,GHCR_TOKEN,GHCR_USERNAME,API_PORT
+          envs: API_IMAGE,MLFLOW_IMAGE,EC2_APP_DIR,GHCR_TOKEN,GHCR_USERNAME,API_PORT,MIN_DOCKER_FREE_MB
           script_stop: true
           script_path: scripts/deploy-ec2.sh
           command_timeout: 20m

@@ -11,6 +11,12 @@ for variable in "${required[@]}"; do
   fi
 done
 
+MIN_DOCKER_FREE_MB=${MIN_DOCKER_FREE_MB:-1024}
+if ! [[ "$MIN_DOCKER_FREE_MB" =~ ^[0-9]+$ ]]; then
+  echo "MIN_DOCKER_FREE_MB must be a whole number of MiB" >&2
+  exit 1
+fi
+
 if [[ ! -f "$EC2_APP_DIR/docker-compose.prod.yml" ]]; then
   echo "Missing $EC2_APP_DIR/docker-compose.prod.yml. Complete the one-time EC2 setup first." >&2
   exit 1
@@ -52,6 +58,44 @@ if ! "${DOCKER[@]}" compose version >/dev/null 2>&1; then
   exit 1
 fi
 
+docker_root=$("${DOCKER[@]}" info --format '{{.DockerRootDir}}')
+if [[ -z "$docker_root" || ! -d "$docker_root" ]]; then
+  echo "Could not determine Docker's data directory." >&2
+  exit 1
+fi
+
+report_docker_storage() {
+  echo "Docker data directory: $docker_root"
+  df -h "$docker_root"
+  df -i "$docker_root"
+  "${DOCKER[@]}" system df || true
+}
+
+ensure_docker_space() {
+  # Remove only images and build cache not used by a container.  Volumes,
+  # containers, and the current deployment images are never pruned here.
+  echo "Reclaiming unused Docker images and build cache before pulling..."
+  "${DOCKER[@]}" image prune -af --filter "until=168h"
+  "${DOCKER[@]}" builder prune -af --filter "until=168h"
+
+  local available_kb available_inodes
+  available_kb=$(df -Pk "$docker_root" | awk 'NR==2 {print $4}')
+  available_inodes=$(df -Pi "$docker_root" | awk 'NR==2 {print $4}')
+  if [[ -z "$available_kb" || -z "$available_inodes" ]]; then
+    echo "Unable to read available Docker disk space or inode count." >&2
+    report_docker_storage >&2
+    exit 1
+  fi
+
+  if (( available_kb < MIN_DOCKER_FREE_MB * 1024 || available_inodes < 10000 )); then
+    echo "Insufficient Docker storage after cleanup; need at least ${MIN_DOCKER_FREE_MB} MiB and 10,000 free inodes." >&2
+    report_docker_storage >&2
+    exit 1
+  fi
+
+  report_docker_storage
+}
+
 echo "$GHCR_TOKEN" | "${DOCKER[@]}" login ghcr.io --username "$GHCR_USERNAME" --password-stdin
 cd "$EC2_APP_DIR"
 
@@ -66,6 +110,7 @@ EOF
 # Pull before replacing the running container, keeping interruption minimal.
 export API_IMAGE
 export MLFLOW_IMAGE
+ensure_docker_space
 "${DOCKER[@]}" compose -f docker-compose.prod.yml pull
 "${DOCKER[@]}" compose -f docker-compose.prod.yml up -d --remove-orphans
 

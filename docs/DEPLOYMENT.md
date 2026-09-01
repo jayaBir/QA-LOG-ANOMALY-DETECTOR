@@ -17,7 +17,7 @@ sudo mkdir -p <EC2_APP_DIR>
 sudo chown <EC2_USER>:<EC2_USER> <EC2_APP_DIR>
 ```
 
-The deployment script installs Docker Engine and Docker Compose v2 if absent, uploads the Compose file, writes a mode-600 `.env` file from protected GitHub secrets, pulls before replacing the container, checks `/health` for up to two minutes, and prunes only dangling images older than seven days. The SSH user must have passwordless `sudo` for first-time Docker installation, or Docker must already be usable by it.
+The deployment script installs Docker Engine and Docker Compose v2 if absent, uploads the Compose file, writes a mode-600 `.env` file from protected GitHub secrets, removes Docker images and build cache unused for seven days before pulling, verifies Docker's data filesystem has at least 1 GiB and 10,000 inodes free, then replaces the container and checks `/health` for up to two minutes. This prevents a new image layer from exhausting overlayfs during extraction. The SSH user must have passwordless `sudo` for first-time Docker installation, or Docker must already be usable by it.
 
 The EC2 Compose stack runs MLflow in its own persistent service. The API and model-bootstrap service use `http://mlflow:5000`, where `mlflow` is Docker Compose service DNS; do not override it with `localhost`.
 
@@ -34,6 +34,8 @@ Create protected GitHub Environments named `production-ec2` and `production-kube
 | `GHCR_TOKEN` | PAT with `read:packages`, required only for a private GHCR package |
 
 Optional protected environment variable: `API_PORT` (defaults to `8000`). The workflow uses `GITHUB_TOKEN` with `packages: write` to publish GHCR images. If organization policy restricts it, permit GitHub Actions package publishing/read-write workflow permissions.
+
+To require a larger free-space reserve before image pulls, set `MIN_DOCKER_FREE_MB` in the remote deployment environment (default: `1024`).
 
 Put this secret in **production-kubernetes**:
 
