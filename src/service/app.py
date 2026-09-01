@@ -6,6 +6,10 @@ from pathlib import Path
 import joblib
 import os
 import json
+import logging
+from threading import Lock
+
+from fastapi import HTTPException
 
 try:
     import mlflow
@@ -16,6 +20,7 @@ except ImportError:
     MLFLOW_ENABLED = False
 
 app = FastAPI(title="Log Anomaly Detection Service")
+logger = logging.getLogger(__name__)
 
 DATA_PATH = Path("data/processed/anomalies_explained.csv")
 MODEL_PATH = Path("src/models/model.pkl")
@@ -47,7 +52,33 @@ def load_prediction_model():
     return None
 
 
-model = load_prediction_model()
+# Do not load the serving model while this module is imported.  A temporary
+# MLflow outage (or an unavailable artifact) must not make Uvicorn exit before
+# it can expose its health endpoint.  The first prediction loads the model and
+# returns a useful 503 if the registry is still unavailable.
+model = None
+model_load_error = None
+model_lock = Lock()
+
+
+def get_prediction_model():
+    global model, model_load_error
+
+    if model is not None:
+        return model
+
+    with model_lock:
+        if model is not None:
+            return model
+        try:
+            model = load_prediction_model()
+            model_load_error = None
+        except Exception as error:
+            model_load_error = error
+            logger.exception("Unable to load the prediction model")
+            return None
+
+    return model
 
 # -----------------------
 # Health
@@ -55,6 +86,8 @@ model = load_prediction_model()
 
 @app.get("/health")
 def health():
+    # This is intentionally a liveness endpoint.  It confirms that the HTTP
+    # server is accepting traffic even while MLflow is recovering.
     return {"status": "ok"}
 
 
@@ -98,8 +131,12 @@ class LogRequest(BaseModel):
 @app.post("/predict_anomaly")
 def predict_anomaly(log: LogRequest):
 
-    if model is None:
-        return {"error": "Model not found. Run training first."}
+    prediction_model = get_prediction_model()
+    if prediction_model is None:
+        detail = "Model is not available."
+        if model_load_error is not None:
+            detail += " Check the MLflow registry and artifact store."
+        raise HTTPException(status_code=503, detail=detail)
 
     X = np.array([[
         log.requests_per_minute,
@@ -107,8 +144,8 @@ def predict_anomaly(log: LogRequest):
         log.avg_response_size
     ]])
 
-    prediction = model.predict(X)[0]
-    score = model.decision_function(X)[0]
+    prediction = prediction_model.predict(X)[0]
+    score = prediction_model.decision_function(X)[0]
 
     return {
         "is_anomaly": 1 if prediction == -1 else 0,

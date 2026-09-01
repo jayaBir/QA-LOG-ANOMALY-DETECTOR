@@ -80,4 +80,5 @@ done
 
 echo "Health check failed; the newly deployed container was not accepted." >&2
 "${DOCKER[@]}" compose -f docker-compose.prod.yml ps
+"${DOCKER[@]}" compose -f docker-compose.prod.yml logs --tail=200 api >&2 || true
 exit 1
