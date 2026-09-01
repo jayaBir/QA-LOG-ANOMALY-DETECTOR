@@ -377,8 +377,10 @@ Copy `.env.example` for local development. Do not commit credentials.
 
 # Limitations & Future Work
 
-- **Model Serving:** Production FastAPI instances load the model assigned to the MLflow `production` alias. Local development can use the saved `model.pkl` when no MLflow model URI is configured.
-- **Monitoring:** Feature drift detection is batch-based. Integrating Prometheus and Grafana would enable real-time operational monitoring and alerting.
-- **Scalability:** The application currently targets a single EC2 instance. Production deployments can be scaled using ECS or Kubernetes with auto-scaling.
-- **Feature Store:** Features are recomputed for every training run. A dedicated feature store (e.g., Feast) would improve feature reuse and consistency.
-- **Model Rollback:** MLflow model promotion is currently manual. Automated deployment strategies such as canary or blue-green deployments can be added.
+- **MLflow durability and availability:** The supplied MLflow deployment uses SQLite and filesystem-backed artifacts. It is intentionally single-replica; use PostgreSQL and object storage before supporting high availability or concurrent training writers.
+- **Service readiness:** `/health` is a liveness endpoint and does not confirm that the MLflow model is available. Add a readiness endpoint, background model-load retries, and model-load metrics before relying on automated traffic routing.
+- **Batch-result storage:** `/detect` and `/drift` read generated files from the application filesystem. Move these reports to durable shared or object storage for multi-replica serving.
+- **Observability:** Drift detection is batch-based and deployment logs are the primary diagnostic signal. Add structured logs, metrics, dashboards, alerts, and tracing for production operations.
+- **Feature reuse:** Features are recomputed for every training run. A feature store or versioned feature dataset would improve reuse, lineage, and training-serving consistency.
+- **Model governance:** Production promotion and model rollback are manual. Add validation gates, approval controls, documented rollback runbooks, and optional canary releases.
+- **Scalability:** Both EC2 Docker Compose and Kubernetes are supported. Horizontal scaling requires external MLflow storage and shared report storage rather than the current single-node filesystem design.
