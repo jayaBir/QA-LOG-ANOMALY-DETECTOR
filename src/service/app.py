@@ -31,6 +31,44 @@ DEFAULT_MODEL_URI = "models:/qa-log-anomaly-detector@production"
 # Load model once
 # -----------------------
 
+def resolve_model_uri(model_uri):
+    """Resolve an aliased registered model to this project's run artifact.
+
+    Models logged by ``train_model`` are stored under the ``model`` artifact
+    path. Recent MLflow registries can record a model-ID URI (``models:/m-…``)
+    as a model version's source. Some clients incorrectly treat that nested
+    URI as a local artifact and fail with ``No such artifact: ''``. The model
+    version retains its originating run ID, which is a stable way to retrieve
+    the same artifact from this tracking server.
+    """
+    if not model_uri.startswith("models:/"):
+        return model_uri
+
+    model_reference = model_uri.removeprefix("models:/")
+    if "@" not in model_reference:
+        return model_uri
+
+    model_name, model_alias = model_reference.rsplit("@", maxsplit=1)
+    if not model_name or not model_alias:
+        return model_uri
+
+    version = mlflow.MlflowClient().get_model_version_by_alias(
+        model_name,
+        model_alias,
+    )
+    if not version.run_id:
+        return model_uri
+
+    resolved_uri = f"runs:/{version.run_id}/model"
+    logger.info(
+        "Loading registered model %s@%s from run artifact %s",
+        model_name,
+        model_alias,
+        resolved_uri,
+    )
+    return resolved_uri
+
+
 def load_prediction_model():
     model_uri = os.getenv("MLFLOW_MODEL_URI")
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
@@ -44,7 +82,7 @@ def load_prediction_model():
             raise RuntimeError("MLflow is required to load MLFLOW_MODEL_URI")
         if tracking_uri:
             mlflow.set_tracking_uri(tracking_uri)
-        return mlflow.sklearn.load_model(model_uri)
+        return mlflow.sklearn.load_model(resolve_model_uri(model_uri))
 
     if MODEL_PATH.exists():
         return joblib.load(MODEL_PATH)
