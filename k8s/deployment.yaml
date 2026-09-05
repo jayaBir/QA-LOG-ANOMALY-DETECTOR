@@ -71,7 +71,7 @@ spec:
               mountPath: /tmp
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: http
             initialDelaySeconds: 10
             timeoutSeconds: 3

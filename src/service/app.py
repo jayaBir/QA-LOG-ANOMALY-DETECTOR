@@ -129,6 +129,17 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/ready")
+def ready():
+    """Return ready only when the configured serving model can be loaded."""
+    if get_prediction_model() is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model is not available. Check the MLflow registry and artifact store.",
+        )
+    return {"status": "ready"}
+
+
 @app.get("/drift")
 def drift_status():
     if not DRIFT_REPORT_PATH.exists():

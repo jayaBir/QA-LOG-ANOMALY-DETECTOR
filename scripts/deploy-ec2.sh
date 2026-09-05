@@ -120,7 +120,7 @@ if ! "${DOCKER[@]}" compose -f docker-compose.prod.yml up -d --remove-orphans; t
 fi
 
 for attempt in {1..24}; do
-  if curl --fail --silent --show-error --max-time 5 http://127.0.0.1:"${API_PORT:-8000}"/health >/dev/null; then
+  if curl --fail --silent --show-error --max-time 5 http://127.0.0.1:"${API_PORT:-8000}"/ready >/dev/null; then
     "${DOCKER[@]}" image prune -f --filter "until=168h"
     echo "Deployment healthy: $API_IMAGE"
     exit 0

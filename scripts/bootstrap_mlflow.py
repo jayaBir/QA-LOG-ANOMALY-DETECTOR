@@ -28,6 +28,25 @@ def latest_version(client: MlflowClient):
     return max(versions, key=lambda version: int(version.version), default=None)
 
 
+def verify_model_artifact(version):
+    """Ensure the registered version still has the model artifact to serve."""
+    if not version.run_id:
+        raise RuntimeError(
+            f"Model version {version.version} has no originating MLflow run."
+        )
+
+    artifact_path = Path(
+        mlflow.artifacts.download_artifacts(
+            artifact_uri=f"runs:/{version.run_id}/model"
+        )
+    )
+    if not (artifact_path / "MLmodel").is_file():
+        raise RuntimeError(
+            f"Model version {version.version} is missing its MLmodel artifact at "
+            f"{artifact_path}. Train and promote a replacement version."
+        )
+
+
 def main():
     tracking_uri = os.environ["MLFLOW_TRACKING_URI"]
     mlflow.set_tracking_uri(tracking_uri)
@@ -36,6 +55,7 @@ def main():
     # Production alias already exists
     try:
         current = client.get_model_version_by_alias(MODEL_NAME, MODEL_ALIAS)
+        verify_model_artifact(current)
         print(
             f"{MODEL_NAME}@{MODEL_ALIAS} already points to version "
             f"{current.version}; nothing to do."
@@ -73,6 +93,7 @@ def main():
             MODEL_ALIAS,
             version.version,
         )
+        verify_model_artifact(version)
 
         print(
             f"Assigned '{MODEL_ALIAS}' alias to model version "
